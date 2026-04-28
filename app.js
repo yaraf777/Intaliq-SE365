@@ -29,7 +29,16 @@ const seedState = {
 let state = loadState();
 
 const app = document.querySelector("#app");
+const statusTime = document.querySelector("#status-time");
 let authReady = false;
+
+function updateStatusTime() {
+  if (!statusTime) return;
+  statusTime.textContent = new Intl.DateTimeFormat([], {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date());
+}
 
 function userStorageKey(userId = "guest") {
   return `${STORAGE_PREFIX}:${userId}`;
@@ -191,12 +200,15 @@ function homeView() {
   const profileLine = [state.profile.major, state.profile.year].filter(Boolean).join(" · ") || "Complete your profile";
   return withTabs("home", `
     <div class="stack">
-      <div class="profile-row">
-        <div class="avatar">${initials(state.profile.name || "Student")}</div>
-        <div>
-          <h1 class="page-title">Hi, ${firstName}</h1>
-          <div class="subtle">${profileLine}</div>
+      <div class="home-header">
+        <div class="profile-row">
+          <div class="avatar">${initials(state.profile.name || "Student")}</div>
+          <div>
+            <h1 class="page-title">Hi, ${firstName}</h1>
+            <div class="subtle">${profileLine}</div>
+          </div>
         </div>
+        <button class="icon-btn" data-action="signout" title="Log out">Log out</button>
       </div>
       <div class="metric-row">
         <div class="metric"><b>${state.goals.length}</b><span>Goals</span></div>
@@ -349,13 +361,15 @@ function page(title, subtitle, body) {
 
 function withTabs(active, body) {
   return `
-    ${body}
-    <nav class="tabs" aria-label="Primary">
-      ${tab("home", "H", "Home", active)}
-      ${tab("goals", "G", "Goals", active)}
-      ${tab("sessions", "S", "Sessions", active)}
-      ${tab("profile", "P", "Profile", active)}
-    </nav>
+    <div class="view-with-tabs">
+      <div class="tab-content">${body}</div>
+      <nav class="tabs" aria-label="Primary">
+        ${tab("home", "H", "Home", active)}
+        ${tab("goals", "G", "Goals", active)}
+        ${tab("sessions", "S", "Sessions", active)}
+        ${tab("profile", "P", "Profile", active)}
+      </nav>
+    </div>
   `;
 }
 
@@ -646,4 +660,6 @@ async function initAuth() {
   });
 }
 
+updateStatusTime();
+setInterval(updateStatusTime, 30000);
 initAuth();

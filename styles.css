@@ -74,7 +74,7 @@ button {
 
 .screen {
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
   padding: 18px;
   position: relative;
 }
@@ -142,6 +142,24 @@ button {
   justify-content: space-between;
   gap: 10px;
   margin-bottom: 16px;
+}
+
+.home-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.icon-btn {
+  min-width: 58px;
+  min-height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fff;
+  color: var(--accent-dark);
+  font-size: 12px;
+  font-weight: 900;
 }
 
 .topbar h1,
@@ -232,14 +250,13 @@ button {
 }
 
 .tabs {
-  position: sticky;
+  position: static;
   z-index: 3;
-  bottom: -18px;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   background: #f8f9f5;
   border-top: 1px solid var(--line);
-  margin: 18px -18px -18px;
+  margin: 0;
 }
 
 .tab {
@@ -432,6 +449,19 @@ button {
 
 .danger {
   color: var(--danger);
+}
+
+.view-with-tabs {
+  height: 100%;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  margin: -18px;
+}
+
+.tab-content {
+  min-height: 0;
+  overflow: auto;
+  padding: 18px;
 }
 
 .notice {
