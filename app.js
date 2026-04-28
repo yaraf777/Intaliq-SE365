@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 
-const STORAGE_PREFIX = "intaliq-prototype-state";
+const STORAGE_PREFIX = "intaliq-app-state-v2";
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const hasSupabaseConfig = Boolean(supabaseUrl && supabaseAnonKey);
@@ -15,55 +15,15 @@ const seedState = {
   sessionMode: "join",
   user: null,
   profile: {
-    name: "Yara",
-    email: "yara@example.com",
-    major: "Software Engineering",
-    year: "Junior",
-    bio: "Focused on building better study routines.",
+    name: "",
+    email: "",
+    major: "",
+    year: "Freshman",
+    bio: "",
   },
-  goals: [
-    {
-      id: crypto.randomUUID(),
-      title: "Finish SE365 prototype",
-      category: "Project",
-      due: "This week",
-      progress: 65,
-      checkpoints: ["Sketch flow", "Build screens", "Test session", "Connect data"],
-      completed: 2,
-    },
-    {
-      id: crypto.randomUUID(),
-      title: "Practice data structures",
-      category: "Study",
-      due: "April",
-      progress: 40,
-      checkpoints: ["Arrays", "Trees", "Graphs", "Mock quiz"],
-      completed: 1,
-    },
-  ],
-  sessions: [
-    {
-      id: "S365",
-      title: "SE365 Sprint Room",
-      type: "Project",
-      date: "Today",
-      time: "7:30 PM",
-      capacity: 6,
-      members: ["Yara", "Lama", "Noura"],
-      notes: "Prototype walkthrough, issues list, and goal check-in.",
-    },
-    {
-      id: "DS20",
-      title: "Algorithms Review",
-      type: "Study",
-      date: "Tomorrow",
-      time: "5:00 PM",
-      capacity: 5,
-      members: ["Faisal", "Yara"],
-      notes: "Graph traversal and practice questions.",
-    },
-  ],
-  joinedSessions: ["S365"],
+  goals: [],
+  sessions: [],
+  joinedSessions: [],
 };
 
 let state = loadState();
@@ -118,9 +78,9 @@ function profileFromUser(user) {
   return {
     name: meta.name || meta.full_name || user.email?.split("@")[0] || "Student",
     email: user.email || "",
-    major: meta.major || "Software Engineering",
-    year: meta.year || "Junior",
-    bio: meta.bio || "Focused on building better study routines.",
+    major: meta.major || "",
+    year: meta.year || "Freshman",
+    bio: meta.bio || "",
   };
 }
 
@@ -144,7 +104,7 @@ function button(label, className, action, attrs = "") {
 
 function render() {
   if (!authReady) {
-    app.innerHTML = `<div class="brand-screen"><div class="mark">I</div><p class="tagline">Loading Intaliq...</p></div>`;
+    app.innerHTML = `<div class="brand-screen"><img class="brand-logo" src="/favicon.svg" alt="Intaliq" /><p class="tagline">Loading Intaliq...</p></div>`;
     return;
   }
 
@@ -180,7 +140,7 @@ function signInView() {
   return `
     <div class="brand-screen">
       <div>
-        <div class="mark">I</div>
+        <img class="brand-logo" src="/favicon.svg" alt="Intaliq" />
         <h1 class="brand-title">Intaliq</h1>
         <p class="tagline">Launch your goals with focused peer sessions.</p>
       </div>
@@ -200,7 +160,7 @@ function signInView() {
         ` : ""}
         <label class="field">
           <span>Email</span>
-          <input class="input" name="email" type="email" value="${state.profile.email}" required />
+          <input class="input" name="email" type="email" value="${state.profile.email}" autocomplete="email" required />
         </label>
         <label class="field">
           <span>Password</span>
@@ -227,13 +187,15 @@ function onboardingView() {
 function homeView() {
   const nextSession = state.sessions.find((session) => state.joinedSessions.includes(session.id));
   const activeGoal = state.goals[0];
+  const firstName = state.profile.name.split(" ")[0] || "there";
+  const profileLine = [state.profile.major, state.profile.year].filter(Boolean).join(" · ") || "Complete your profile";
   return withTabs("home", `
     <div class="stack">
       <div class="profile-row">
-        <div class="avatar">${initials(state.profile.name)}</div>
+        <div class="avatar">${initials(state.profile.name || "Student")}</div>
         <div>
-          <h1 class="page-title">Hi, ${state.profile.name.split(" ")[0]}</h1>
-          <div class="subtle">${state.profile.major} · ${state.profile.year}</div>
+          <h1 class="page-title">Hi, ${firstName}</h1>
+          <div class="subtle">${profileLine}</div>
         </div>
       </div>
       <div class="metric-row">
@@ -294,7 +256,7 @@ function sessionsView() {
       <button class="${state.sessionMode === "mine" ? "active" : ""}" data-action="mode-mine">Mine</button>
     </div>
     <div class="stack" style="margin-top: 12px;">
-      ${(state.sessionMode === "join" ? open : joined).map((session) => sessionCard(session)).join("") || `<div class="empty">No sessions in this list.</div>`}
+      ${(state.sessionMode === "join" ? open : joined).map((session) => sessionCard(session)).join("") || `<div class="empty">${state.sessionMode === "join" ? "No open sessions yet. Create the first one." : "You have not joined any sessions yet."}</div>`}
     </div>
   `);
 }
@@ -354,9 +316,9 @@ function profileView() {
       ${message}
       ${error}
       <div class="profile-row card">
-        <div class="avatar">${initials(state.profile.name)}</div>
+        <div class="avatar">${initials(state.profile.name || "Student")}</div>
         <div>
-          <strong>${state.profile.name}</strong>
+          <strong>${state.profile.name || "New student"}</strong>
           <div class="subtle">${state.profile.email}</div>
         </div>
       </div>

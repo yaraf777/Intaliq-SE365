@@ -99,6 +99,14 @@ button {
   margin: 0 auto;
 }
 
+.brand-logo {
+  width: 96px;
+  height: 96px;
+  display: block;
+  margin: 0 auto;
+  border-radius: 22px;
+}
+
 .brand-title {
   text-align: center;
   margin: 0;
