@@ -15,6 +15,7 @@ const seedState = {
   pendingPhone: "",
   pendingVerificationRole: "member",
   pendingVerificationName: "",
+  pendingVerificationEmail: "",
   sessionMode: "join",
   user: null,
   profile: {
@@ -82,10 +83,6 @@ function formData(form) {
   return Object.fromEntries(new FormData(form).entries());
 }
 
-function isEmailCredential(value) {
-  return value.includes("@");
-}
-
 function normalizePhone(value) {
   return value.replace(/[^\d+]/g, "");
 }
@@ -111,7 +108,7 @@ function profileFromUser(user) {
   const meta = user.user_metadata || {};
   return {
     name: meta.name || meta.full_name || user.email?.split("@")[0] || "User",
-    email: user.email || "",
+    email: user.email || meta.email || "",
     role: meta.role === "coach" ? "coach" : "member",
     fitnessLevel: meta.fitnessLevel || "Beginner",
     primaryGoal: meta.primaryGoal || "",
@@ -231,10 +228,14 @@ function signInView() {
             <input class="input auth-input" name="name" type="text" value="${state.profile.name}" required />
           </label>
         ` : ""}
+        <label class="field">
+          <span>Email</span>
+          <input class="input auth-input" name="email" type="email" value="${state.profile.email}" placeholder="Enter your email" autocomplete="email" ${isSignup ? "required" : ""} />
+        </label>
         <input type="hidden" name="role" value="${selectedRole}" />
         <label class="field">
-          <span>Email or Phone Number</span>
-          <input class="input auth-input" name="credential" type="text" value="${state.profile.email}" placeholder="Enter your email or phone number" autocomplete="username" required />
+          <span>Phone Number</span>
+          <input class="input auth-input" name="phone" type="tel" placeholder="Enter your phone number with country code" autocomplete="tel" required />
         </label>
         <label class="field">
           <span>Password</span>
@@ -682,26 +683,24 @@ async function handleAuth(data) {
 
   setState({ authLoading: true, authError: "", authMessage: "" });
 
-  const credential = data.credential.trim();
+  const phoneResult = validatePhone(data.phone.trim());
   const password = data.password;
   const isSignup = state.authMode === "signup";
-  const isEmail = isEmailCredential(credential);
-  const phoneResult = isEmail ? { phone: "", error: "" } : validatePhone(credential);
 
   if (phoneResult.error) {
     setState({ authLoading: false, authError: phoneResult.error, authMessage: "" });
     return;
   }
 
-  const credentials = isEmail ? { email: credential, password } : { phone: phoneResult.phone, password };
+  const credentials = { phone: phoneResult.phone, password };
 
   const response = isSignup
     ? await supabase.auth.signUp({
         ...credentials,
         options: {
-          ...(isEmail ? { emailRedirectTo: window.location.origin } : {}),
           data: {
-            name: data.name || credential.split("@")[0],
+            name: data.name || phoneResult.phone,
+            email: data.email || "",
             role: data.role === "coach" ? "coach" : "member",
           },
         },
@@ -709,7 +708,7 @@ async function handleAuth(data) {
     : await supabase.auth.signInWithPassword(credentials);
 
   if (response.error) {
-    if (!isEmail && !isSignup && /confirm|verify|otp|code/i.test(response.error.message)) {
+    if (!isSignup && /confirm|verify|otp|code/i.test(response.error.message)) {
       await sendPhoneOtp(phoneResult.phone, data.role, data.name);
       return;
     }
@@ -717,20 +716,24 @@ async function handleAuth(data) {
     return;
   }
 
-  if (!isEmail && isSignup) {
+  if (isSignup) {
+    if (response.data.session) {
+      await supabase.auth.signOut();
+    }
     setState({
       authLoading: false,
       route: "verify",
       pendingPhone: phoneResult.phone,
       pendingVerificationRole: data.role === "coach" ? "coach" : "member",
       pendingVerificationName: data.name || phoneResult.phone,
+      pendingVerificationEmail: data.email || "",
       authError: "",
       authMessage: "Enter the 6-digit code sent to your phone.",
     });
     return;
   }
 
-  if (!isEmail && !isSignup) {
+  if (!isSignup) {
     const verifiedUser = response.data.user;
     await supabase.auth.signOut();
     await sendPhoneOtp(
@@ -741,26 +744,7 @@ async function handleAuth(data) {
     return;
   }
 
-  if (isSignup && !response.data.session) {
-    setState({
-      authLoading: false,
-      authMode: "signin",
-      authError: "",
-      authMessage: isEmail ? "Account created. Check your email to confirm it, then sign in." : "Account created. Check your phone for a verification code, then sign in.",
-    });
-    return;
-  }
-
-  const user = response.data.user;
-  state = loadState(user);
-  setState({
-    user: publicUser(user),
-    profile: profileFromUser(user),
-    route: state.profile.role === "coach" ? (state.sessions.length ? "home" : "onboarding") : (state.goals.length ? "home" : "onboarding"),
-    authLoading: false,
-    authError: "",
-    authMessage: "",
-  });
+  setState({ authLoading: false, authError: "Unable to continue. Please try again.", authMessage: "" });
 }
 
 async function sendPhoneOtp(phone, role = state.profile.role, name = state.profile.name) {
@@ -772,6 +756,7 @@ async function sendPhoneOtp(phone, role = state.profile.role, name = state.profi
       shouldCreateUser: false,
       data: {
         name: name || phone,
+        email: state.pendingVerificationEmail || state.profile.email || "",
         role: role === "coach" ? "coach" : "member",
       },
     },
@@ -829,24 +814,28 @@ async function verifyPhoneCode(data) {
   }
 
   const user = response.data.user;
+  let finalUser = user;
   if (user && state.pendingVerificationRole) {
-    await supabase.auth.updateUser({
+    const { data: updatedUserData } = await supabase.auth.updateUser({
       data: {
         name: state.pendingVerificationName,
+        email: state.pendingVerificationEmail,
         role: state.pendingVerificationRole,
       },
     });
+    finalUser = updatedUserData.user || user;
   }
 
-  state = loadState(user);
+  state = loadState(finalUser);
   setState({
-    user: publicUser(user),
-    profile: profileFromUser(user),
+    user: publicUser(finalUser),
+    profile: profileFromUser(finalUser),
     route: state.profile.role === "coach" ? (state.sessions.length ? "home" : "onboarding") : (state.goals.length ? "home" : "onboarding"),
-    pendingPhone: "",
-    pendingVerificationRole: "member",
-    pendingVerificationName: "",
-    authLoading: false,
+      pendingPhone: "",
+      pendingVerificationRole: "member",
+      pendingVerificationName: "",
+      pendingVerificationEmail: "",
+      authLoading: false,
     authError: "",
     authMessage: "",
   });
