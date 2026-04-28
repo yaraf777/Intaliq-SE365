@@ -12,13 +12,18 @@ const seedState = {
   authMessage: "",
   authError: "",
   authLoading: false,
+  pendingPhone: "",
+  pendingVerificationRole: "member",
+  pendingVerificationName: "",
   sessionMode: "join",
   user: null,
   profile: {
     name: "",
     email: "",
-    major: "",
-    year: "Freshman",
+    role: "member",
+    fitnessLevel: "Beginner",
+    primaryGoal: "",
+    specialty: "",
     bio: "",
   },
   goals: [],
@@ -29,6 +34,7 @@ const seedState = {
 let state = loadState();
 
 const app = document.querySelector("#app");
+const phone = document.querySelector(".phone");
 const statusTime = document.querySelector("#status-time");
 let authReady = false;
 
@@ -76,6 +82,25 @@ function formData(form) {
   return Object.fromEntries(new FormData(form).entries());
 }
 
+function isEmailCredential(value) {
+  return value.includes("@");
+}
+
+function normalizePhone(value) {
+  return value.replace(/[^\d+]/g, "");
+}
+
+function validatePhone(value) {
+  const phone = normalizePhone(value);
+  if (!phone.startsWith("+")) {
+    return { phone, error: "Enter your phone number with country code, like +9665XXXXXXX." };
+  }
+  if (phone.length < 8) {
+    return { phone, error: "Enter a valid phone number." };
+  }
+  return { phone, error: "" };
+}
+
 function publicUser(user) {
   if (!user) return null;
   return { id: user.id, email: user.email };
@@ -85,10 +110,12 @@ function profileFromUser(user) {
   if (!user) return null;
   const meta = user.user_metadata || {};
   return {
-    name: meta.name || meta.full_name || user.email?.split("@")[0] || "Student",
+    name: meta.name || meta.full_name || user.email?.split("@")[0] || "User",
     email: user.email || "",
-    major: meta.major || "",
-    year: meta.year || "Freshman",
+    role: meta.role === "coach" ? "coach" : "member",
+    fitnessLevel: meta.fitnessLevel || "Beginner",
+    primaryGoal: meta.primaryGoal || "",
+    specialty: meta.specialty || "",
     bio: meta.bio || "",
   };
 }
@@ -112,6 +139,8 @@ function button(label, className, action, attrs = "") {
 }
 
 function render() {
+  phone?.classList.toggle("auth-phone", (state.route === "signin" || state.route === "verify") && !state.user);
+
   if (!authReady) {
     app.innerHTML = `<div class="brand-screen"><img class="brand-logo" src="/favicon.svg" alt="Intaliq" /><p class="tagline">Loading Intaliq...</p></div>`;
     return;
@@ -124,6 +153,7 @@ function render() {
 
   const views = {
     signin: signInView,
+    verify: verifyView,
     onboarding: onboardingView,
     home: homeView,
     goals: goalsView,
@@ -138,6 +168,40 @@ function render() {
   bindEvents();
 }
 
+function verifyView() {
+  const message = state.authMessage ? `<div class="notice">${state.authMessage}</div>` : "";
+  const error = state.authError ? `<div class="notice danger-box">${state.authError}</div>` : "";
+
+  return `
+    <div class="auth-screen verify-screen">
+      <header class="auth-hero">
+        <h1>Welcome to Intaliq</h1>
+        <p>Take your first step - Intaliq</p>
+      </header>
+      <form class="auth-panel verify-panel stack" data-form="verify-phone">
+        <div class="verify-icon">▦</div>
+        <div class="verify-copy">
+          <h2>Verify Your Identity</h2>
+          <p>We've sent a verification code to ${state.pendingPhone || "your phone"}.</p>
+        </div>
+        ${message}
+        ${error}
+        <label class="field">
+          <span>Verification Code</span>
+          <input class="input auth-input code-input" name="token" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="Enter 6-digit code" required />
+        </label>
+        <button class="btn btn-primary auth-submit" type="submit" ${state.authLoading ? "disabled" : ""}>
+          ${state.authLoading ? "Verifying..." : "Verify & Login"}
+        </button>
+        <div class="verify-actions">
+          <button type="button" data-action="resend-phone-code">Resend code</button>
+          <button type="button" data-action="back-to-login">Back to login</button>
+        </div>
+      </form>
+    </div>
+  `;
+}
+
 function signInView() {
   const isSignup = state.authMode === "signup";
   const setupNotice = hasSupabaseConfig
@@ -145,18 +209,18 @@ function signInView() {
     : `<div class="notice danger-box">Supabase is not configured yet. Add your project URL and anon key to <strong>.env.local</strong>, then restart the local server.</div>`;
   const message = state.authMessage ? `<div class="notice">${state.authMessage}</div>` : "";
   const error = state.authError ? `<div class="notice danger-box">${state.authError}</div>` : "";
+  const selectedRole = state.profile.role === "coach" ? "coach" : "member";
 
   return `
-    <div class="brand-screen">
-      <div>
-        <img class="brand-logo" src="/favicon.svg" alt="Intaliq" />
-        <h1 class="brand-title">Intaliq</h1>
-        <p class="tagline">Launch your goals with focused peer sessions.</p>
-      </div>
-      <form class="card stack" data-form="auth">
-        <div class="segmented">
-          <button type="button" class="${!isSignup ? "active" : ""}" data-action="auth-signin">Sign in</button>
-          <button type="button" class="${isSignup ? "active" : ""}" data-action="auth-signup">Create account</button>
+    <div class="auth-screen">
+      <header class="auth-hero">
+        <h1>Welcome to Intaliq</h1>
+        <p>Take your first step - Intaliq</p>
+      </header>
+      <form class="auth-panel stack" data-form="auth">
+        <div class="auth-role-toggle" role="group" aria-label="Account type">
+          <button type="button" class="${selectedRole === "member" ? "active" : ""}" data-action="role-member">User</button>
+          <button type="button" class="${selectedRole === "coach" ? "active" : ""}" data-action="role-coach">Coach</button>
         </div>
         ${setupNotice}
         ${message}
@@ -164,45 +228,55 @@ function signInView() {
         ${isSignup ? `
           <label class="field">
             <span>Name</span>
-            <input class="input" name="name" type="text" value="${state.profile.name}" required />
+            <input class="input auth-input" name="name" type="text" value="${state.profile.name}" required />
           </label>
         ` : ""}
+        <input type="hidden" name="role" value="${selectedRole}" />
         <label class="field">
-          <span>Email</span>
-          <input class="input" name="email" type="email" value="${state.profile.email}" autocomplete="email" required />
+          <span>Email or Phone Number</span>
+          <input class="input auth-input" name="credential" type="text" value="${state.profile.email}" placeholder="Enter your email or phone number" autocomplete="username" required />
         </label>
         <label class="field">
           <span>Password</span>
-          <input class="input" name="password" type="password" minlength="6" autocomplete="${isSignup ? "new-password" : "current-password"}" required />
+          <input class="input auth-input" name="password" type="password" minlength="6" placeholder="Enter your password" autocomplete="${isSignup ? "new-password" : "current-password"}" required />
         </label>
-        <button class="btn btn-primary" type="submit" ${!hasSupabaseConfig || state.authLoading ? "disabled" : ""}>
-          ${state.authLoading ? "Please wait..." : isSignup ? "Create account" : "Sign in"}
+        <button class="btn btn-primary auth-submit" type="submit" ${!hasSupabaseConfig || state.authLoading ? "disabled" : ""}>
+          ${state.authLoading ? "Please wait..." : isSignup ? "Create account" : "Continue"}
         </button>
+        <p class="auth-switch">
+          ${isSignup ? `Already have an account? <button type="button" data-action="auth-signin">Sign in</button>` : `Don't have an account yet? <button type="button" data-action="auth-signup">Sign up</button>`}
+        </p>
       </form>
     </div>
   `;
 }
 
 function onboardingView() {
-  return page("Set your first goal", "Tell Intaliq what you want to move forward.", `
+  const isCoach = state.profile.role === "coach";
+  return page(isCoach ? "Create your first session" : "Set your first goal", isCoach ? "Start by opening a workout session for clients." : "Tell Intaliq what you want to move forward.", `
     <form class="stack" data-form="onboarding">
-      ${goalFields({ title: "", category: "Study", due: "This week", progress: 0, checkpoints: ["", "", "", ""] })}
-      <button class="btn btn-primary" type="submit">Save goal</button>
+      ${isCoach ? sessionFields() : goalFields({ title: "", category: "Strength", due: "This week", progress: 0, checkpoints: ["", "", "", ""] })}
+      <button class="btn btn-primary" type="submit">${isCoach ? "Create session" : "Save goal"}</button>
       ${button("Skip for now", "btn-ghost", "skip-onboarding")}
     </form>
   `);
 }
 
 function homeView() {
+  if (state.profile.role === "coach") return coachHomeView();
+  return memberHomeView();
+}
+
+function memberHomeView() {
   const nextSession = state.sessions.find((session) => state.joinedSessions.includes(session.id));
   const activeGoal = state.goals[0];
   const firstName = state.profile.name.split(" ")[0] || "there";
-  const profileLine = [state.profile.major, state.profile.year].filter(Boolean).join(" · ") || "Complete your profile";
+  const profileLine = [state.profile.primaryGoal, state.profile.fitnessLevel].filter(Boolean).join(" · ") || "Complete your fitness profile";
   return withTabs("home", `
     <div class="stack">
       <div class="home-header">
         <div class="profile-row">
-          <div class="avatar">${initials(state.profile.name || "Student")}</div>
+          <div class="avatar">${initials(state.profile.name || "User")}</div>
           <div>
             <h1 class="page-title">Hi, ${firstName}</h1>
             <div class="subtle">${profileLine}</div>
@@ -227,29 +301,69 @@ function homeView() {
           <h2 class="page-title">Next session</h2>
           ${button("Browse", "btn-link", "sessions")}
         </div>
-        ${nextSession ? sessionCard(nextSession) : `<div class="empty">Join or create a session to study with peers.</div>`}
+        ${nextSession ? sessionCard(nextSession) : `<div class="empty">Join a workout session or create your own training group.</div>`}
+      </section>
+    </div>
+  `);
+}
+
+function coachHomeView() {
+  const firstName = state.profile.name.split(" ")[0] || "coach";
+  const upcoming = state.sessions[0];
+  return withTabs("home", `
+    <div class="stack">
+      <div class="home-header">
+        <div class="profile-row">
+          <div class="avatar">${initials(state.profile.name || "Coach")}</div>
+          <div>
+            <h1 class="page-title">Hi, ${firstName}</h1>
+            <div class="subtle">${state.profile.specialty || "Coach profile"}</div>
+          </div>
+        </div>
+        <button class="icon-btn" data-action="signout" title="Log out">Log out</button>
+      </div>
+      <div class="metric-row">
+        <div class="metric"><b>${state.sessions.length}</b><span>Sessions</span></div>
+        <div class="metric"><b>${state.joinedSessions.length}</b><span>Clients</span></div>
+        <div class="metric"><b>${state.goals.length}</b><span>Plans</span></div>
+      </div>
+      <section class="card stack">
+        <div class="goal-head">
+          <h2 class="page-title">Upcoming class</h2>
+          ${button("Create", "btn-link", "new-session")}
+        </div>
+        ${upcoming ? sessionCard(upcoming) : `<div class="empty">Create your first coaching session for users to join.</div>`}
+      </section>
+      <section class="card stack">
+        <div class="goal-head">
+          <h2 class="page-title">Training plan</h2>
+          ${button("Add", "btn-link", "new-goal")}
+        </div>
+        ${state.goals[0] ? goalCard(state.goals[0], true) : `<div class="empty">Add a plan template or milestone for your clients.</div>`}
       </section>
     </div>
   `);
 }
 
 function goalsView() {
+  const isCoach = state.profile.role === "coach";
   return withTabs("goals", `
     <div class="topbar">
-      <h1>Goals</h1>
-      ${button("+ Goal", "btn-primary", "new-goal")}
+      <h1>${isCoach ? "Plans" : "Goals"}</h1>
+      ${button(isCoach ? "+ Plan" : "+ Goal", "btn-primary", "new-goal")}
     </div>
     <div class="stack">
-      ${state.goals.length ? state.goals.map((goal) => goalCard(goal)).join("") : `<div class="empty">No goals yet.</div>`}
+      ${state.goals.length ? state.goals.map((goal) => goalCard(goal)).join("") : `<div class="empty">${isCoach ? "No training plans yet." : "No goals yet."}</div>`}
     </div>
   `);
 }
 
 function goalFormView() {
-  return page("New goal", "Set a measurable goal and checkpoint flags.", `
+  const isCoach = state.profile.role === "coach";
+  return page(isCoach ? "New training plan" : "New goal", isCoach ? "Create a plan template with client checkpoints." : "Set a measurable goal and checkpoint flags.", `
     <form class="stack" data-form="goal">
-      ${goalFields({ title: "", category: "Study", due: "This week", progress: 0, checkpoints: ["", "", "", ""] })}
-      <button class="btn btn-primary" type="submit">Create goal</button>
+      ${goalFields({ title: "", category: "Strength", due: "This week", progress: 0, checkpoints: ["", "", "", ""] })}
+      <button class="btn btn-primary" type="submit">${isCoach ? "Create plan" : "Create goal"}</button>
       ${button("Back", "btn-ghost", "goals")}
     </form>
   `);
@@ -274,16 +388,9 @@ function sessionsView() {
 }
 
 function sessionFormView() {
-  return page("Create session", "Open a focused room around one goal or topic.", `
+  return page("Create session", state.profile.role === "coach" ? "Schedule a coaching session for users to join." : "Open a focused workout around one goal or topic.", `
     <form class="stack" data-form="session">
-      <label class="field"><span>Title</span><input class="input" name="title" placeholder="Capstone planning" required /></label>
-      <label class="field"><span>Type</span><select class="select" name="type"><option>Study</option><option>Project</option><option>Career</option><option>Wellbeing</option></select></label>
-      <div class="grid-2">
-        <label class="field"><span>Date</span><input class="input" name="date" value="Today" required /></label>
-        <label class="field"><span>Time</span><input class="input" name="time" value="6:00 PM" required /></label>
-      </div>
-      <label class="field"><span>Capacity</span><input class="input" name="capacity" type="number" min="2" max="20" value="6" required /></label>
-      <label class="field"><span>Notes</span><textarea class="textarea" name="notes" placeholder="What will the session focus on?"></textarea></label>
+      ${sessionFields()}
       <button class="btn btn-primary" type="submit">Create session</button>
       ${button("Back", "btn-ghost", "sessions")}
     </form>
@@ -319,6 +426,7 @@ function sessionDetailView() {
 function profileView() {
   const message = state.authMessage ? `<div class="notice">${state.authMessage}</div>` : "";
   const error = state.authError ? `<div class="notice danger-box">${state.authError}</div>` : "";
+  const isCoach = state.profile.role === "coach";
   return withTabs("profile", `
     <div class="topbar">
       <h1>Profile</h1>
@@ -328,16 +436,19 @@ function profileView() {
       ${message}
       ${error}
       <div class="profile-row card">
-        <div class="avatar">${initials(state.profile.name || "Student")}</div>
+        <div class="avatar">${initials(state.profile.name || (isCoach ? "Coach" : "User"))}</div>
         <div>
-          <strong>${state.profile.name || "New student"}</strong>
-          <div class="subtle">${state.profile.email}</div>
+          <strong>${state.profile.name || (isCoach ? "New coach" : "New user")}</strong>
+          <div class="subtle">${isCoach ? "Coach" : "User"} · ${state.profile.email}</div>
         </div>
       </div>
       <label class="field"><span>Name</span><input class="input" name="name" value="${state.profile.name}" required /></label>
       <label class="field"><span>Email</span><input class="input" name="email" type="email" value="${state.profile.email}" required /></label>
-      <label class="field"><span>Major</span><input class="input" name="major" value="${state.profile.major}" /></label>
-      <label class="field"><span>Year</span><select class="select" name="year">${["Freshman", "Sophomore", "Junior", "Senior", "Graduate"].map((year) => `<option ${year === state.profile.year ? "selected" : ""}>${year}</option>`).join("")}</select></label>
+      <label class="field"><span>Account type</span><select class="select" name="role">${["member", "coach"].map((role) => `<option value="${role}" ${role === state.profile.role ? "selected" : ""}>${role === "coach" ? "Coach" : "User"}</option>`).join("")}</select></label>
+      ${isCoach
+        ? `<label class="field"><span>Specialty</span><input class="input" name="specialty" value="${state.profile.specialty}" placeholder="Strength, mobility, nutrition" /></label>`
+        : `<label class="field"><span>Primary goal</span><input class="input" name="primaryGoal" value="${state.profile.primaryGoal}" placeholder="Build strength, lose weight, run 5K" /></label>`}
+      <label class="field"><span>Fitness level</span><select class="select" name="fitnessLevel">${["Beginner", "Intermediate", "Advanced"].map((level) => `<option ${level === state.profile.fitnessLevel ? "selected" : ""}>${level}</option>`).join("")}</select></label>
       <label class="field"><span>Bio</span><textarea class="textarea" name="bio">${state.profile.bio}</textarea></label>
       <button class="btn btn-primary" type="submit">Update profile</button>
     </form>
@@ -360,12 +471,13 @@ function page(title, subtitle, body) {
 }
 
 function withTabs(active, body) {
+  const isCoach = state.profile.role === "coach";
   return `
     <div class="view-with-tabs">
       <div class="tab-content">${body}</div>
       <nav class="tabs" aria-label="Primary">
         ${tab("home", "H", "Home", active)}
-        ${tab("goals", "G", "Goals", active)}
+        ${tab("goals", "G", isCoach ? "Plans" : "Goals", active)}
         ${tab("sessions", "S", "Sessions", active)}
         ${tab("profile", "P", "Profile", active)}
       </nav>
@@ -379,13 +491,26 @@ function tab(route, icon, label, active) {
 
 function goalFields(goal) {
   return `
-    <label class="field"><span>Goal title</span><input class="input" name="title" value="${goal.title}" required /></label>
+    <label class="field"><span>${state.profile.role === "coach" ? "Plan title" : "Goal title"}</span><input class="input" name="title" value="${goal.title}" required /></label>
     <div class="grid-2">
-      <label class="field"><span>Category</span><select class="select" name="category">${["Study", "Project", "Career", "Wellbeing"].map((category) => `<option ${category === goal.category ? "selected" : ""}>${category}</option>`).join("")}</select></label>
+      <label class="field"><span>Category</span><select class="select" name="category">${["Strength", "Cardio", "Mobility", "Weight loss", "Nutrition", "Recovery"].map((category) => `<option ${category === goal.category ? "selected" : ""}>${category}</option>`).join("")}</select></label>
       <label class="field"><span>Due</span><input class="input" name="due" value="${goal.due}" required /></label>
     </div>
     <label class="field"><span>Progress</span><input class="input" name="progress" type="number" min="0" max="100" value="${goal.progress}" /></label>
     ${[0, 1, 2, 3].map((index) => `<label class="field"><span>Checkpoint ${index + 1}</span><input class="input" name="checkpoint${index}" value="${goal.checkpoints[index] || ""}" /></label>`).join("")}
+  `;
+}
+
+function sessionFields() {
+  return `
+    <label class="field"><span>Title</span><input class="input" name="title" placeholder="${state.profile.role === "coach" ? "Strength fundamentals" : "Saturday run group"}" required /></label>
+    <label class="field"><span>Type</span><select class="select" name="type"><option>Strength</option><option>Cardio</option><option>Mobility</option><option>HIIT</option><option>Yoga</option><option>Nutrition</option></select></label>
+    <div class="grid-2">
+      <label class="field"><span>Date</span><input class="input" name="date" value="Today" required /></label>
+      <label class="field"><span>Time</span><input class="input" name="time" value="6:00 PM" required /></label>
+    </div>
+    <label class="field"><span>Capacity</span><input class="input" name="capacity" type="number" min="2" max="20" value="6" required /></label>
+    <label class="field"><span>Notes</span><textarea class="textarea" name="notes" placeholder="What will the session focus on?"></textarea></label>
   `;
 }
 
@@ -419,7 +544,7 @@ function sessionCard(session) {
         </div>
         <span class="pill ${joined ? "" : "warn"}">${joined ? "Joined" : session.type}</span>
       </div>
-      <div class="subtle">${session.members.length}/${session.capacity} students · Code ${session.id}</div>
+      <div class="subtle">${session.members.length}/${session.capacity} people · Code ${session.id}</div>
       <div class="grid-2">
         <button class="btn btn-ghost" data-action="session-detail" data-id="${session.id}">Details</button>
         ${joined ? `<button class="btn btn-dark" data-action="session-detail" data-id="${session.id}">Open</button>` : `<button class="btn btn-primary" data-action="join-session" data-id="${session.id}">Join</button>`}
@@ -445,6 +570,25 @@ function makeGoal(data) {
   };
 }
 
+function makeSession(data) {
+  const id = data.title
+    .replace(/[^a-z0-9]/gi, "")
+    .slice(0, 4)
+    .toUpperCase()
+    .padEnd(4, "X");
+
+  return {
+    id,
+    title: data.title,
+    type: data.type,
+    date: data.date,
+    time: data.time,
+    capacity: Number(data.capacity),
+    members: [state.profile.name || "Host"],
+    notes: data.notes || "Focused workout session.",
+  };
+}
+
 function bindEvents() {
   app.querySelectorAll("[data-route]").forEach((element) => {
     element.addEventListener("click", () => navigate(element.dataset.route));
@@ -466,6 +610,10 @@ function handleAction(action, data = {}) {
   const actions = {
     "auth-signin": () => setState({ authMode: "signin", authError: "", authMessage: "" }),
     "auth-signup": () => setState({ authMode: "signup", authError: "", authMessage: "" }),
+    "role-member": () => setState({ profile: { ...state.profile, role: "member" }, authError: "", authMessage: "" }),
+    "role-coach": () => setState({ profile: { ...state.profile, role: "coach" }, authError: "", authMessage: "" }),
+    "back-to-login": () => setState({ route: "signin", authMode: "signin", authError: "", authMessage: "" }),
+    "resend-phone-code": () => resendPhoneCode(),
     "skip-onboarding": () => navigate("home"),
     back: () => navigate(state.user ? "home" : "signin"),
     goals: () => navigate("goals"),
@@ -490,31 +638,33 @@ async function handleForm(type, data) {
     return;
   }
 
+  if (type === "verify-phone") {
+    await verifyPhoneCode(data);
+    return;
+  }
+
   if (type === "onboarding" || type === "goal") {
+    if (type === "onboarding" && state.profile.role === "coach") {
+      const session = makeSession(data);
+      setState({
+        sessions: [session, ...state.sessions.filter((item) => item.id !== session.id)],
+        joinedSessions: [...new Set([session.id, ...state.joinedSessions])],
+        activeSessionId: session.id,
+        route: "home",
+      });
+      return;
+    }
+
     const goal = makeGoal(data);
     setState({ goals: [goal, ...state.goals], route: type === "onboarding" ? "home" : "goals" });
   }
 
   if (type === "session") {
-    const id = data.title
-      .replace(/[^a-z0-9]/gi, "")
-      .slice(0, 4)
-      .toUpperCase()
-      .padEnd(4, "X");
-    const session = {
-      id,
-      title: data.title,
-      type: data.type,
-      date: data.date,
-      time: data.time,
-      capacity: Number(data.capacity),
-      members: [state.profile.name],
-      notes: data.notes || "Focused work session.",
-    };
+    const session = makeSession(data);
     setState({
-      sessions: [session, ...state.sessions.filter((item) => item.id !== id)],
-      joinedSessions: [...new Set([id, ...state.joinedSessions])],
-      activeSessionId: id,
+      sessions: [session, ...state.sessions.filter((item) => item.id !== session.id)],
+      joinedSessions: [...new Set([session.id, ...state.joinedSessions])],
+      activeSessionId: session.id,
       route: "session-detail",
     });
   }
@@ -532,23 +682,62 @@ async function handleAuth(data) {
 
   setState({ authLoading: true, authError: "", authMessage: "" });
 
-  const email = data.email.trim();
+  const credential = data.credential.trim();
   const password = data.password;
   const isSignup = state.authMode === "signup";
+  const isEmail = isEmailCredential(credential);
+  const phoneResult = isEmail ? { phone: "", error: "" } : validatePhone(credential);
+
+  if (phoneResult.error) {
+    setState({ authLoading: false, authError: phoneResult.error, authMessage: "" });
+    return;
+  }
+
+  const credentials = isEmail ? { email: credential, password } : { phone: phoneResult.phone, password };
 
   const response = isSignup
     ? await supabase.auth.signUp({
-        email,
-        password,
+        ...credentials,
         options: {
-          emailRedirectTo: window.location.origin,
-          data: { name: data.name || email.split("@")[0] },
+          ...(isEmail ? { emailRedirectTo: window.location.origin } : {}),
+          data: {
+            name: data.name || credential.split("@")[0],
+            role: data.role === "coach" ? "coach" : "member",
+          },
         },
       })
-    : await supabase.auth.signInWithPassword({ email, password });
+    : await supabase.auth.signInWithPassword(credentials);
 
   if (response.error) {
+    if (!isEmail && !isSignup && /confirm|verify|otp|code/i.test(response.error.message)) {
+      await sendPhoneOtp(phoneResult.phone, data.role, data.name);
+      return;
+    }
     setState({ authLoading: false, authError: response.error.message, authMessage: "" });
+    return;
+  }
+
+  if (!isEmail && isSignup) {
+    setState({
+      authLoading: false,
+      route: "verify",
+      pendingPhone: phoneResult.phone,
+      pendingVerificationRole: data.role === "coach" ? "coach" : "member",
+      pendingVerificationName: data.name || phoneResult.phone,
+      authError: "",
+      authMessage: "Enter the 6-digit code sent to your phone.",
+    });
+    return;
+  }
+
+  if (!isEmail && !isSignup) {
+    const verifiedUser = response.data.user;
+    await supabase.auth.signOut();
+    await sendPhoneOtp(
+      phoneResult.phone,
+      verifiedUser?.user_metadata?.role || data.role,
+      verifiedUser?.user_metadata?.name || data.name || phoneResult.phone,
+    );
     return;
   }
 
@@ -557,7 +746,7 @@ async function handleAuth(data) {
       authLoading: false,
       authMode: "signin",
       authError: "",
-      authMessage: "Account created. Check your email to confirm it, then sign in.",
+      authMessage: isEmail ? "Account created. Check your email to confirm it, then sign in." : "Account created. Check your phone for a verification code, then sign in.",
     });
     return;
   }
@@ -567,7 +756,96 @@ async function handleAuth(data) {
   setState({
     user: publicUser(user),
     profile: profileFromUser(user),
-    route: state.goals.length ? "home" : "onboarding",
+    route: state.profile.role === "coach" ? (state.sessions.length ? "home" : "onboarding") : (state.goals.length ? "home" : "onboarding"),
+    authLoading: false,
+    authError: "",
+    authMessage: "",
+  });
+}
+
+async function sendPhoneOtp(phone, role = state.profile.role, name = state.profile.name) {
+  if (!supabase) return;
+
+  const { error } = await supabase.auth.signInWithOtp({
+    phone,
+    options: {
+      shouldCreateUser: false,
+      data: {
+        name: name || phone,
+        role: role === "coach" ? "coach" : "member",
+      },
+    },
+  });
+
+  if (error) {
+    setState({ authLoading: false, authError: error.message, authMessage: "" });
+    return;
+  }
+
+  setState({
+    authLoading: false,
+    route: "verify",
+    pendingPhone: phone,
+    pendingVerificationRole: role === "coach" ? "coach" : "member",
+    pendingVerificationName: name || phone,
+    authError: "",
+    authMessage: "Enter the 6-digit code sent to your phone.",
+  });
+}
+
+async function resendPhoneCode() {
+  if (!state.pendingPhone) {
+    setState({ route: "signin", authError: "Enter your phone number again to request a code.", authMessage: "" });
+    return;
+  }
+
+  setState({ authLoading: true, authError: "", authMessage: "" });
+  await sendPhoneOtp(state.pendingPhone, state.pendingVerificationRole, state.pendingVerificationName);
+}
+
+async function verifyPhoneCode(data) {
+  if (!supabase) {
+    setState({ authError: "Add Supabase environment variables before verifying.", authMessage: "" });
+    return;
+  }
+
+  const token = data.token.trim();
+  if (!/^\d{6}$/.test(token)) {
+    setState({ authError: "Enter the 6-digit verification code.", authMessage: "" });
+    return;
+  }
+
+  setState({ authLoading: true, authError: "", authMessage: "" });
+
+  const response = await supabase.auth.verifyOtp({
+    phone: state.pendingPhone,
+    token,
+    type: "sms",
+  });
+
+  if (response.error) {
+    setState({ authLoading: false, authError: response.error.message, authMessage: "" });
+    return;
+  }
+
+  const user = response.data.user;
+  if (user && state.pendingVerificationRole) {
+    await supabase.auth.updateUser({
+      data: {
+        name: state.pendingVerificationName,
+        role: state.pendingVerificationRole,
+      },
+    });
+  }
+
+  state = loadState(user);
+  setState({
+    user: publicUser(user),
+    profile: profileFromUser(user),
+    route: state.profile.role === "coach" ? (state.sessions.length ? "home" : "onboarding") : (state.goals.length ? "home" : "onboarding"),
+    pendingPhone: "",
+    pendingVerificationRole: "member",
+    pendingVerificationName: "",
     authLoading: false,
     authError: "",
     authMessage: "",
@@ -585,8 +863,10 @@ async function updateProfile(data) {
     const update = {
       data: {
         name: nextProfile.name,
-        major: nextProfile.major,
-        year: nextProfile.year,
+        role: nextProfile.role,
+        fitnessLevel: nextProfile.fitnessLevel,
+        primaryGoal: nextProfile.primaryGoal,
+        specialty: nextProfile.specialty,
         bio: nextProfile.bio,
       },
     };
@@ -639,6 +919,7 @@ function advanceGoal(id) {
 async function initAuth() {
   if (!supabase) {
     authReady = true;
+    state.authMode = "signin";
     render();
     return;
   }
@@ -646,6 +927,12 @@ async function initAuth() {
   const { data, error } = await supabase.auth.getSession();
   const user = data.session?.user || null;
   state = loadState(user);
+  if (!user) {
+    state.route = "signin";
+    state.authMode = "signin";
+  } else if (state.route === "signin") {
+    state.route = state.profile.role === "coach" ? (state.sessions.length ? "home" : "onboarding") : (state.goals.length ? "home" : "onboarding");
+  }
   if (error) {
     state.authError = error.message;
   }

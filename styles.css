@@ -67,6 +67,15 @@ button {
   background: #f8f9f5;
 }
 
+.phone.auth-phone .status-bar {
+  background: #626562;
+  color: #fff;
+}
+
+.phone.auth-phone .status-icons {
+  color: #fff;
+}
+
 .status-icons {
   letter-spacing: 1px;
   color: #495049;
@@ -84,6 +93,168 @@ button {
   display: grid;
   align-content: center;
   gap: 22px;
+}
+
+.auth-screen {
+  min-height: 100%;
+  margin: -18px;
+  padding: 108px 18px 24px;
+  display: grid;
+  align-content: start;
+  gap: 38px;
+  color: #fff;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(0, 0, 0, 0.82)),
+    radial-gradient(circle at 50% 20%, rgba(255, 255, 255, 0.2), transparent 38%),
+    #626562;
+}
+
+.auth-hero {
+  text-align: center;
+}
+
+.auth-hero h1 {
+  margin: 0;
+  color: #fff;
+  font-size: 40px;
+  line-height: 1.05;
+  font-weight: 500;
+}
+
+.auth-hero p {
+  margin: 12px 0 0;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 18px;
+}
+
+.auth-panel {
+  padding: 36px 26px 22px;
+  border: 0;
+  border-radius: 36px;
+  background: rgba(88, 88, 88, 0.88);
+  box-shadow: 0 42px 80px rgba(0, 0, 0, 0.45);
+}
+
+.auth-panel .field {
+  gap: 12px;
+}
+
+.auth-panel .field span {
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 19px;
+  font-weight: 500;
+}
+
+.auth-role-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.auth-role-toggle button {
+  min-height: 58px;
+  border: 0;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.22);
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.auth-role-toggle button.active {
+  background: #c7ff4f;
+  color: #111;
+}
+
+.auth-input {
+  min-height: 58px;
+  border: 0;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.auth-input::placeholder {
+  color: rgba(255, 255, 255, 0.64);
+}
+
+.auth-submit {
+  min-height: 58px;
+  margin-top: 10px;
+  border-radius: 16px;
+  background: #c7ff4f;
+  color: #404040;
+  font-size: 20px;
+}
+
+.auth-switch {
+  margin: 2px 0 0;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 14px;
+}
+
+.auth-switch button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.82);
+  text-decoration: underline;
+}
+
+.verify-screen {
+  padding-top: 132px;
+}
+
+.verify-panel {
+  text-align: center;
+}
+
+.verify-icon {
+  width: 62px;
+  height: 62px;
+  margin: -8px auto 0;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  color: #c7ff4f;
+  font-size: 34px;
+  background: rgba(0, 0, 0, 0.38);
+}
+
+.verify-copy h2 {
+  margin: 0;
+  color: #fff;
+  font-size: 22px;
+}
+
+.verify-copy p {
+  margin: 8px 0 0;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.code-input {
+  text-align: center;
+  letter-spacing: 5px;
+}
+
+.verify-actions {
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+}
+
+.verify-actions button {
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.74);
+  text-decoration: underline;
 }
 
 .mark {
@@ -445,6 +616,37 @@ button {
 .segmented button.active {
   background: #fff;
   color: var(--accent-dark);
+}
+
+.role-choice {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.role-card {
+  min-height: 116px;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.role-card input {
+  accent-color: var(--accent-dark);
+}
+
+.role-card strong {
+  font-size: 16px;
+}
+
+.role-card small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.3;
 }
 
 .danger {
