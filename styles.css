@@ -428,7 +428,7 @@ button {
   position: static;
   z-index: 3;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   background: #f8f9f5;
   border-top: 1px solid var(--line);
   margin: 0;
@@ -448,7 +448,7 @@ button {
 }
 
 .tab strong {
-  font-size: 20px;
+  font-size: 18px;
   line-height: 1;
 }
 

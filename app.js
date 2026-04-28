@@ -15,6 +15,9 @@ const seedState = {
   pendingEmail: "",
   pendingVerificationRole: "member",
   pendingVerificationName: "",
+  pendingFitnessLevel: "Beginner",
+  pendingPrimaryGoal: "",
+  pendingSpecialty: "",
   sessionMode: "join",
   user: null,
   profile: {
@@ -29,6 +32,7 @@ const seedState = {
   goals: [],
   sessions: [],
   joinedSessions: [],
+  partners: [],
 };
 
 let state = loadState();
@@ -135,7 +139,7 @@ function render() {
     return;
   }
 
-  const protectedRoutes = ["home", "goals", "sessions", "profile", "goal-form", "session-form", "session-detail"];
+  const protectedRoutes = ["home", "goals", "sessions", "partners", "profile", "goal-form", "session-form", "session-detail"];
   if (protectedRoutes.includes(state.route) && !state.user) {
     state.route = "signin";
   }
@@ -147,6 +151,7 @@ function render() {
     home: homeView,
     goals: goalsView,
     sessions: sessionsView,
+    partners: partnersView,
     profile: profileView,
     "goal-form": goalFormView,
     "session-form": sessionFormView,
@@ -207,10 +212,12 @@ function signInView() {
         <p>Take your first step - Intaliq</p>
       </header>
       <form class="auth-panel stack" data-form="auth">
-        <div class="auth-role-toggle" role="group" aria-label="Account type">
-          <button type="button" class="${selectedRole === "member" ? "active" : ""}" data-action="role-member">User</button>
-          <button type="button" class="${selectedRole === "coach" ? "active" : ""}" data-action="role-coach">Coach</button>
-        </div>
+        ${isSignup ? `
+          <div class="auth-role-toggle" role="group" aria-label="Account type">
+            <button type="button" class="${selectedRole === "member" ? "active" : ""}" data-action="role-member">User</button>
+            <button type="button" class="${selectedRole === "coach" ? "active" : ""}" data-action="role-coach">Coach</button>
+          </div>
+        ` : ""}
         ${setupNotice}
         ${message}
         ${error}
@@ -218,6 +225,23 @@ function signInView() {
           <label class="field">
             <span>Name</span>
             <input class="input auth-input" name="name" type="text" value="${state.profile.name}" required />
+          </label>
+          ${selectedRole === "coach" ? `
+            <label class="field">
+              <span>Coaching specialty</span>
+              <input class="input auth-input" name="specialty" type="text" value="${state.profile.specialty}" placeholder="Strength, mobility, nutrition" required />
+            </label>
+          ` : `
+            <label class="field">
+              <span>Primary fitness goal</span>
+              <input class="input auth-input" name="primaryGoal" type="text" value="${state.profile.primaryGoal}" placeholder="Build strength, lose weight, run 5K" required />
+            </label>
+          `}
+          <label class="field">
+            <span>Fitness level</span>
+            <select class="select auth-input" name="fitnessLevel">
+              ${["Beginner", "Intermediate", "Advanced"].map((level) => `<option ${level === state.profile.fitnessLevel ? "selected" : ""}>${level}</option>`).join("")}
+            </select>
           </label>
         ` : ""}
         <label class="field">
@@ -229,6 +253,12 @@ function signInView() {
           <span>Password</span>
           <input class="input auth-input" name="password" type="password" minlength="6" placeholder="Enter your password" autocomplete="${isSignup ? "new-password" : "current-password"}" required />
         </label>
+        ${isSignup ? `
+          <label class="field">
+            <span>Confirm password</span>
+            <input class="input auth-input" name="confirmPassword" type="password" minlength="6" placeholder="Re-enter your password" autocomplete="new-password" required />
+          </label>
+        ` : ""}
         <button class="btn btn-primary auth-submit" type="submit" ${!hasSupabaseConfig || state.authLoading ? "disabled" : ""}>
           ${state.authLoading ? "Please wait..." : isSignup ? "Create account" : "Continue"}
         </button>
@@ -242,7 +272,7 @@ function signInView() {
 
 function onboardingView() {
   const isCoach = state.profile.role === "coach";
-  return page(isCoach ? "Create your first session" : "Set your first goal", isCoach ? "Start by opening a workout session for clients." : "Tell Intaliq what you want to move forward.", `
+  return page(isCoach ? "Create your first session" : "Set your first goal", isCoach ? "Start by opening a workout session for users." : "Tell Intaliq what you want to move forward.", `
     <form class="stack" data-form="onboarding">
       ${isCoach ? sessionFields() : goalFields({ title: "", category: "Strength", due: "This week", progress: 0, checkpoints: ["", "", "", ""] })}
       <button class="btn btn-primary" type="submit">${isCoach ? "Create session" : "Save goal"}</button>
@@ -299,6 +329,7 @@ function memberHomeView() {
 function coachHomeView() {
   const firstName = state.profile.name.split(" ")[0] || "coach";
   const upcoming = state.sessions[0];
+  const pendingCount = state.sessions.reduce((total, session) => total + (session.pendingApplicants?.length || 0), 0);
   return withTabs("home", `
     <div class="stack">
       <div class="home-header">
@@ -313,22 +344,22 @@ function coachHomeView() {
       </div>
       <div class="metric-row">
         <div class="metric"><b>${state.sessions.length}</b><span>Sessions</span></div>
-        <div class="metric"><b>${state.joinedSessions.length}</b><span>Clients</span></div>
-        <div class="metric"><b>${state.goals.length}</b><span>Plans</span></div>
+        <div class="metric"><b>${pendingCount}</b><span>Requests</span></div>
+        <div class="metric"><b>${state.partners.length}</b><span>Partners</span></div>
       </div>
       <section class="card stack">
         <div class="goal-head">
-          <h2 class="page-title">Upcoming class</h2>
+          <h2 class="page-title">My sessions</h2>
           ${button("Create", "btn-link", "new-session")}
         </div>
-        ${upcoming ? sessionCard(upcoming) : `<div class="empty">Create your first coaching session for users to join.</div>`}
+        ${upcoming ? sessionCard(upcoming) : `<div class="empty">Create sessions, review join requests, and announce updates.</div>`}
       </section>
       <section class="card stack">
         <div class="goal-head">
-          <h2 class="page-title">Training plan</h2>
-          ${button("Add", "btn-link", "new-goal")}
+          <h2 class="page-title">Find partners</h2>
+          ${button("Browse", "btn-link", "partners")}
         </div>
-        ${state.goals[0] ? goalCard(state.goals[0], true) : `<div class="empty">Add a plan template or milestone for your clients.</div>`}
+        <div class="empty">Connect with users and other coaches for programs, classes, or accountability.</div>
       </section>
     </div>
   `);
@@ -359,6 +390,18 @@ function goalFormView() {
 }
 
 function sessionsView() {
+  if (state.profile.role === "coach") {
+    return withTabs("sessions", `
+      <div class="topbar">
+        <h1>My Sessions</h1>
+        ${button("+ Session", "btn-primary", "new-session")}
+      </div>
+      <div class="stack">
+        ${state.sessions.length ? state.sessions.map((session) => sessionCard(session)).join("") : `<div class="empty">No sessions yet. Create your first coaching session.</div>`}
+      </div>
+    `);
+  }
+
   const joined = state.sessions.filter((session) => state.joinedSessions.includes(session.id));
   const open = state.sessions.filter((session) => !state.joinedSessions.includes(session.id));
   return withTabs("sessions", `
@@ -388,13 +431,16 @@ function sessionFormView() {
 
 function sessionDetailView() {
   const session = state.sessions.find((item) => item.id === state.activeSessionId) || state.sessions[0];
+  const isCoach = state.profile.role === "coach";
   const joined = state.joinedSessions.includes(session.id);
+  const pendingApplicants = session.pendingApplicants || [];
+  const announcements = session.announcements || [];
   return page(session.title, `${session.date} · ${session.time}`, `
     <div class="stack">
       <div class="card stack">
         <div class="session-head">
           <h3>${session.type}</h3>
-          <span class="pill ${joined ? "" : "warn"}">${joined ? "Joined" : "Open"}</span>
+          <span class="pill ${joined || isCoach ? "" : "warn"}">${isCoach ? session.level : joined ? "Joined" : session.admission}</span>
         </div>
         <p class="subtle">${session.notes}</p>
         <div class="metric-row">
@@ -403,10 +449,35 @@ function sessionDetailView() {
           <div class="metric"><b>${session.id}</b><span>Code</span></div>
         </div>
       </div>
+      ${isCoach ? `
+        <div class="card stack">
+          <div class="goal-head">
+            <h3>Admission requests</h3>
+            <span class="pill warn">${pendingApplicants.length} pending</span>
+          </div>
+          ${pendingApplicants.length ? pendingApplicants.map((name) => `
+            <div class="list-row">
+              <span>${name}</span>
+              <button class="btn-link" data-action="admit-user" data-id="${session.id}" data-name="${name}">Admit</button>
+            </div>
+          `).join("") : `<div class="empty">No pending users.</div>`}
+        </div>
+        <form class="card stack" data-form="announcement">
+          <label class="field"><span>Announcement</span><textarea class="textarea" name="announcement" placeholder="Share an update with this session"></textarea></label>
+          <input type="hidden" name="sessionId" value="${session.id}" />
+          <button class="btn btn-primary" type="submit">Post announcement</button>
+        </form>
+      ` : ""}
+      ${announcements.length ? `
+        <div class="card stack">
+          <h3>Announcements</h3>
+          ${announcements.map((item) => `<div class="list-row"><span>${item}</span><span class="pill gray">coach</span></div>`).join("")}
+        </div>
+      ` : ""}
       <div class="card">
         ${session.members.map((member) => `<div class="list-row"><span>${member}</span><span class="pill gray">member</span></div>`).join("")}
       </div>
-      ${joined ? button("Leave session", "btn-ghost", "leave-session", `data-id="${session.id}"`) : button("Join session", "btn-primary", "join-session", `data-id="${session.id}"`)}
+      ${isCoach ? "" : joined ? button("Leave session", "btn-ghost", "leave-session", `data-id="${session.id}"`) : button(session.admission === "Approval required" ? "Request to join" : "Join session", "btn-primary", "join-session", `data-id="${session.id}"`)}
       ${button("Back", "btn-ghost", "sessions")}
     </div>
   `);
@@ -444,6 +515,41 @@ function profileView() {
   `);
 }
 
+function partnersView() {
+  const suggested = state.profile.role === "coach"
+    ? [
+        { name: "Maha", role: "User", detail: "Intermediate · Strength goals" },
+        { name: "Omar", role: "Coach", detail: "Mobility coach · Open to co-hosting" },
+        { name: "Noura", role: "User", detail: "Beginner · Needs accountability" },
+      ]
+    : [
+        { name: "Lina", role: "User", detail: "Beginner · Morning workouts" },
+        { name: "Fahad", role: "Coach", detail: "Strength coach · Small groups" },
+        { name: "Sara", role: "User", detail: "Intermediate · Running partner" },
+      ];
+
+  return withTabs("partners", `
+    <div class="topbar">
+      <h1>Partners</h1>
+    </div>
+    <div class="stack">
+      ${suggested.map((partner) => `
+        <article class="session-card">
+          <div class="session-head">
+            <div>
+              <h3>${partner.name}</h3>
+              <div class="subtle">${partner.detail}</div>
+            </div>
+            <span class="pill">${partner.role}</span>
+          </div>
+          <button class="btn btn-primary" data-action="connect-partner" data-name="${partner.name}">Connect</button>
+        </article>
+      `).join("")}
+      ${state.partners.length ? `<div class="card stack"><h3>Connected</h3>${state.partners.map((name) => `<div class="list-row"><span>${name}</span><span class="pill gray">connected</span></div>`).join("")}</div>` : ""}
+    </div>
+  `);
+}
+
 function page(title, subtitle, body) {
   return `
     <div class="topbar">
@@ -468,7 +574,8 @@ function withTabs(active, body) {
         ${tab("home", "H", "Home", active)}
         ${tab("goals", "G", isCoach ? "Plans" : "Goals", active)}
         ${tab("sessions", "S", "Sessions", active)}
-        ${tab("profile", "P", "Profile", active)}
+        ${tab("partners", "P", "Partners", active)}
+        ${tab("profile", "Me", "Profile", active)}
       </nav>
     </div>
   `;
@@ -494,6 +601,10 @@ function sessionFields() {
   return `
     <label class="field"><span>Title</span><input class="input" name="title" placeholder="${state.profile.role === "coach" ? "Strength fundamentals" : "Saturday run group"}" required /></label>
     <label class="field"><span>Type</span><select class="select" name="type"><option>Strength</option><option>Cardio</option><option>Mobility</option><option>HIIT</option><option>Yoga</option><option>Nutrition</option></select></label>
+    <div class="grid-2">
+      <label class="field"><span>Level</span><select class="select" name="level"><option>Beginner</option><option>Intermediate</option><option>Advanced</option></select></label>
+      <label class="field"><span>Admission</span><select class="select" name="admission"><option>Open</option><option>Approval required</option></select></label>
+    </div>
     <div class="grid-2">
       <label class="field"><span>Date</span><input class="input" name="date" value="Today" required /></label>
       <label class="field"><span>Time</span><input class="input" name="time" value="6:00 PM" required /></label>
@@ -524,6 +635,7 @@ function goalCard(goal, compact = false) {
 
 function sessionCard(session) {
   const joined = state.joinedSessions.includes(session.id);
+  const pending = session.pendingApplicants?.length || 0;
   return `
     <article class="session-card">
       <div class="session-head">
@@ -533,7 +645,8 @@ function sessionCard(session) {
         </div>
         <span class="pill ${joined ? "" : "warn"}">${joined ? "Joined" : session.type}</span>
       </div>
-      <div class="subtle">${session.members.length}/${session.capacity} people · Code ${session.id}</div>
+      <div class="subtle">${session.members.length}/${session.capacity} people · ${session.level || "All levels"} · ${session.admission || "Open"}</div>
+      ${state.profile.role === "coach" && pending ? `<div class="notice">${pending} admission request${pending === 1 ? "" : "s"} waiting</div>` : ""}
       <div class="grid-2">
         <button class="btn btn-ghost" data-action="session-detail" data-id="${session.id}">Details</button>
         ${joined ? `<button class="btn btn-dark" data-action="session-detail" data-id="${session.id}">Open</button>` : `<button class="btn btn-primary" data-action="join-session" data-id="${session.id}">Join</button>`}
@@ -570,10 +683,14 @@ function makeSession(data) {
     id,
     title: data.title,
     type: data.type,
+    level: data.level || "Beginner",
+    admission: data.admission || "Open",
     date: data.date,
     time: data.time,
     capacity: Number(data.capacity),
     members: [state.profile.name || "Host"],
+    pendingApplicants: data.admission === "Approval required" ? ["A new user"] : [],
+    announcements: [],
     notes: data.notes || "Focused workout session.",
   };
 }
@@ -614,6 +731,8 @@ function handleAction(action, data = {}) {
     "session-detail": () => setState({ activeSessionId: data.id, route: "session-detail" }),
     "join-session": () => joinSession(data.id),
     "leave-session": () => leaveSession(data.id),
+    "admit-user": () => admitUser(data.id, data.name),
+    "connect-partner": () => connectPartner(data.name),
     "advance-goal": () => advanceGoal(data.id),
     signout: () => signOut(),
   };
@@ -661,6 +780,10 @@ async function handleForm(type, data) {
   if (type === "profile") {
     await updateProfile(data);
   }
+
+  if (type === "announcement") {
+    addAnnouncement(data.sessionId, data.announcement);
+  }
 }
 
 async function handleAuth(data) {
@@ -680,6 +803,21 @@ async function handleAuth(data) {
     return;
   }
 
+  if (isSignup && password !== data.confirmPassword) {
+    setState({ authLoading: false, authError: "Passwords do not match.", authMessage: "" });
+    return;
+  }
+
+  if (isSignup && data.role !== "coach" && !data.primaryGoal.trim()) {
+    setState({ authLoading: false, authError: "Tell us your primary fitness goal.", authMessage: "" });
+    return;
+  }
+
+  if (isSignup && data.role === "coach" && !data.specialty.trim()) {
+    setState({ authLoading: false, authError: "Tell us your coaching specialty.", authMessage: "" });
+    return;
+  }
+
   const credentials = { email: emailResult.email, password };
 
   const response = isSignup
@@ -690,6 +828,9 @@ async function handleAuth(data) {
           data: {
             name: data.name || emailResult.email.split("@")[0],
             role: data.role === "coach" ? "coach" : "member",
+            fitnessLevel: data.fitnessLevel || "Beginner",
+            primaryGoal: data.primaryGoal || "",
+            specialty: data.specialty || "",
           },
         },
       })
@@ -704,7 +845,13 @@ async function handleAuth(data) {
     if (response.data.session) {
       await supabase.auth.signOut();
     }
-    await sendEmailOtp(emailResult.email, data.role, data.name || emailResult.email.split("@")[0]);
+    await sendEmailOtp(emailResult.email, {
+      role: data.role,
+      name: data.name || emailResult.email.split("@")[0],
+      fitnessLevel: data.fitnessLevel || "Beginner",
+      primaryGoal: data.primaryGoal || "",
+      specialty: data.specialty || "",
+    });
     return;
   }
 
@@ -713,8 +860,13 @@ async function handleAuth(data) {
     await supabase.auth.signOut();
     await sendEmailOtp(
       emailResult.email,
-      verifiedUser?.user_metadata?.role || data.role,
-      verifiedUser?.user_metadata?.name || data.name || emailResult.email.split("@")[0],
+      {
+        role: verifiedUser?.user_metadata?.role || "member",
+        name: verifiedUser?.user_metadata?.name || emailResult.email.split("@")[0],
+        fitnessLevel: verifiedUser?.user_metadata?.fitnessLevel || "Beginner",
+        primaryGoal: verifiedUser?.user_metadata?.primaryGoal || "",
+        specialty: verifiedUser?.user_metadata?.specialty || "",
+      },
     );
     return;
   }
@@ -722,16 +874,24 @@ async function handleAuth(data) {
   setState({ authLoading: false, authError: "Unable to continue. Please try again.", authMessage: "" });
 }
 
-async function sendEmailOtp(email, role = state.profile.role, name = state.profile.name) {
+async function sendEmailOtp(email, details = {}) {
   if (!supabase) return;
+  const role = details.role === "coach" ? "coach" : "member";
+  const name = details.name || email.split("@")[0];
+  const fitnessLevel = details.fitnessLevel || "Beginner";
+  const primaryGoal = details.primaryGoal || "";
+  const specialty = details.specialty || "";
 
   const { error } = await supabase.auth.signInWithOtp({
     email,
     options: {
       shouldCreateUser: false,
       data: {
-        name: name || email.split("@")[0],
-        role: role === "coach" ? "coach" : "member",
+        name,
+        role,
+        fitnessLevel,
+        primaryGoal,
+        specialty,
       },
     },
   });
@@ -742,8 +902,11 @@ async function sendEmailOtp(email, role = state.profile.role, name = state.profi
         authLoading: false,
         route: "verify",
         pendingEmail: email,
-        pendingVerificationRole: role === "coach" ? "coach" : "member",
-        pendingVerificationName: name || email.split("@")[0],
+        pendingVerificationRole: role,
+        pendingVerificationName: name,
+        pendingFitnessLevel: fitnessLevel,
+        pendingPrimaryGoal: primaryGoal,
+        pendingSpecialty: specialty,
         authError: "",
         authMessage: "Check your email for the verification code or confirmation link.",
       });
@@ -757,8 +920,11 @@ async function sendEmailOtp(email, role = state.profile.role, name = state.profi
     authLoading: false,
     route: "verify",
     pendingEmail: email,
-    pendingVerificationRole: role === "coach" ? "coach" : "member",
-    pendingVerificationName: name || email.split("@")[0],
+    pendingVerificationRole: role,
+    pendingVerificationName: name,
+    pendingFitnessLevel: fitnessLevel,
+    pendingPrimaryGoal: primaryGoal,
+    pendingSpecialty: specialty,
     authError: "",
     authMessage: "Enter the 6-digit code sent to your email.",
   });
@@ -771,7 +937,13 @@ async function resendEmailCode() {
   }
 
   setState({ authLoading: true, authError: "", authMessage: "" });
-  await sendEmailOtp(state.pendingEmail, state.pendingVerificationRole, state.pendingVerificationName);
+  await sendEmailOtp(state.pendingEmail, {
+    role: state.pendingVerificationRole,
+    name: state.pendingVerificationName,
+    fitnessLevel: state.pendingFitnessLevel,
+    primaryGoal: state.pendingPrimaryGoal,
+    specialty: state.pendingSpecialty,
+  });
 }
 
 async function verifyEmailCode(data) {
@@ -806,6 +978,9 @@ async function verifyEmailCode(data) {
       data: {
         name: state.pendingVerificationName,
         role: state.pendingVerificationRole,
+        fitnessLevel: state.pendingFitnessLevel,
+        primaryGoal: state.pendingPrimaryGoal,
+        specialty: state.pendingSpecialty,
       },
     });
     finalUser = updatedUserData.user || user;
@@ -819,6 +994,9 @@ async function verifyEmailCode(data) {
     pendingEmail: "",
     pendingVerificationRole: "member",
     pendingVerificationName: "",
+    pendingFitnessLevel: "Beginner",
+    pendingPrimaryGoal: "",
+    pendingSpecialty: "",
     authLoading: false,
     authError: "",
     authMessage: "",
@@ -864,6 +1042,17 @@ async function updateProfile(data) {
 }
 
 function joinSession(id) {
+  const selected = state.sessions.find((session) => session.id === id);
+  if (selected?.admission === "Approval required" && state.profile.role !== "coach") {
+    const sessions = state.sessions.map((session) => {
+      if (session.id !== id) return session;
+      const name = state.profile.name || "New user";
+      return { ...session, pendingApplicants: [...new Set([...(session.pendingApplicants || []), name])] };
+    });
+    setState({ sessions, activeSessionId: id, route: "session-detail", authMessage: "Request sent to the coach." });
+    return;
+  }
+
   const sessions = state.sessions.map((session) => {
     if (session.id !== id || session.members.includes(state.profile.name)) return session;
     return { ...session, members: [...session.members, state.profile.name] };
@@ -877,6 +1066,32 @@ function leaveSession(id) {
     return { ...session, members: session.members.filter((member) => member !== state.profile.name) };
   });
   setState({ sessions, joinedSessions: state.joinedSessions.filter((sessionId) => sessionId !== id), route: "sessions" });
+}
+
+function admitUser(id, name) {
+  const sessions = state.sessions.map((session) => {
+    if (session.id !== id) return session;
+    return {
+      ...session,
+      pendingApplicants: (session.pendingApplicants || []).filter((candidate) => candidate !== name),
+      members: [...new Set([...session.members, name])],
+    };
+  });
+  setState({ sessions, activeSessionId: id, route: "session-detail" });
+}
+
+function addAnnouncement(id, announcement) {
+  const text = announcement.trim();
+  if (!text) return;
+  const sessions = state.sessions.map((session) => {
+    if (session.id !== id) return session;
+    return { ...session, announcements: [text, ...(session.announcements || [])] };
+  });
+  setState({ sessions, activeSessionId: id, route: "session-detail" });
+}
+
+function connectPartner(name) {
+  setState({ partners: [...new Set([name, ...state.partners])] });
 }
 
 function advanceGoal(id) {
