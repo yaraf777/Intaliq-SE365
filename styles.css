@@ -98,10 +98,12 @@ button {
 .auth-screen {
   min-height: 100%;
   margin: -18px;
-  padding: 108px 18px 24px;
+  height: calc(100% + 36px);
+  padding: 58px 18px 18px;
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   align-content: start;
-  gap: 38px;
+  gap: 22px;
   color: #fff;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(0, 0, 0, 0.82)),
@@ -116,21 +118,23 @@ button {
 .auth-hero h1 {
   margin: 0;
   color: #fff;
-  font-size: 40px;
+  font-size: 34px;
   line-height: 1.05;
   font-weight: 500;
 }
 
 .auth-hero p {
-  margin: 12px 0 0;
+  margin: 8px 0 0;
   color: rgba(255, 255, 255, 0.72);
-  font-size: 18px;
+  font-size: 17px;
 }
 
 .auth-panel {
-  padding: 36px 26px 22px;
+  min-height: 0;
+  overflow: auto;
+  padding: 22px 24px 18px;
   border: 0;
-  border-radius: 36px;
+  border-radius: 30px;
   background: rgba(88, 88, 88, 0.88);
   box-shadow: 0 42px 80px rgba(0, 0, 0, 0.45);
 }
@@ -141,7 +145,7 @@ button {
 
 .auth-panel .field span {
   color: rgba(255, 255, 255, 0.78);
-  font-size: 19px;
+  font-size: 17px;
   font-weight: 500;
 }
 
@@ -149,16 +153,16 @@ button {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
-  margin-bottom: 20px;
+  margin-bottom: 10px;
 }
 
 .auth-role-toggle button {
-  min-height: 58px;
+  min-height: 50px;
   border: 0;
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.22);
   color: rgba(255, 255, 255, 0.78);
-  font-size: 20px;
+  font-size: 19px;
   font-weight: 900;
 }
 
@@ -168,7 +172,7 @@ button {
 }
 
 .auth-input {
-  min-height: 58px;
+  min-height: 50px;
   border: 0;
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.22);
@@ -182,8 +186,8 @@ button {
 }
 
 .auth-submit {
-  min-height: 58px;
-  margin-top: 10px;
+  min-height: 52px;
+  margin-top: 4px;
   border-radius: 16px;
   background: #c7ff4f;
   color: #404040;
@@ -191,7 +195,7 @@ button {
 }
 
 .auth-switch {
-  margin: 2px 0 0;
+  margin: 0;
   text-align: center;
   color: rgba(255, 255, 255, 0.68);
   font-size: 14px;
@@ -206,7 +210,7 @@ button {
 }
 
 .verify-screen {
-  padding-top: 132px;
+  padding-top: 74px;
 }
 
 .verify-panel {
