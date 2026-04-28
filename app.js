@@ -12,10 +12,9 @@ const seedState = {
   authMessage: "",
   authError: "",
   authLoading: false,
-  pendingPhone: "",
+  pendingEmail: "",
   pendingVerificationRole: "member",
   pendingVerificationName: "",
-  pendingVerificationEmail: "",
   sessionMode: "join",
   user: null,
   profile: {
@@ -83,19 +82,12 @@ function formData(form) {
   return Object.fromEntries(new FormData(form).entries());
 }
 
-function normalizePhone(value) {
-  return value.replace(/[^\d+]/g, "");
-}
-
-function validatePhone(value) {
-  const phone = normalizePhone(value);
-  if (!phone.startsWith("+")) {
-    return { phone, error: "Enter your phone number with country code, like +9665XXXXXXX." };
+function validateEmail(value) {
+  const email = value.trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return { email, error: "Enter a valid email address." };
   }
-  if (phone.length < 8) {
-    return { phone, error: "Enter a valid phone number." };
-  }
-  return { phone, error: "" };
+  return { email, error: "" };
 }
 
 function publicUser(user) {
@@ -175,11 +167,11 @@ function verifyView() {
         <h1>Welcome to Intaliq</h1>
         <p>Take your first step - Intaliq</p>
       </header>
-      <form class="auth-panel verify-panel stack" data-form="verify-phone">
+      <form class="auth-panel verify-panel stack" data-form="verify-email">
         <div class="verify-icon">▦</div>
         <div class="verify-copy">
           <h2>Verify Your Identity</h2>
-          <p>We've sent a verification code to ${state.pendingPhone || "your phone"}.</p>
+          <p>We've sent a verification code to ${state.pendingEmail || "your email"}.</p>
         </div>
         ${message}
         ${error}
@@ -191,7 +183,7 @@ function verifyView() {
           ${state.authLoading ? "Verifying..." : "Verify & Login"}
         </button>
         <div class="verify-actions">
-          <button type="button" data-action="resend-phone-code">Resend code</button>
+          <button type="button" data-action="resend-email-code">Resend code</button>
           <button type="button" data-action="back-to-login">Back to login</button>
         </div>
       </form>
@@ -230,13 +222,9 @@ function signInView() {
         ` : ""}
         <label class="field">
           <span>Email</span>
-          <input class="input auth-input" name="email" type="email" value="${state.profile.email}" placeholder="Enter your email" autocomplete="email" ${isSignup ? "required" : ""} />
+          <input class="input auth-input" name="email" type="email" value="${state.profile.email}" placeholder="Enter your email" autocomplete="email" required />
         </label>
         <input type="hidden" name="role" value="${selectedRole}" />
-        <label class="field">
-          <span>Phone Number</span>
-          <input class="input auth-input" name="phone" type="tel" placeholder="Enter your phone number with country code" autocomplete="tel" required />
-        </label>
         <label class="field">
           <span>Password</span>
           <input class="input auth-input" name="password" type="password" minlength="6" placeholder="Enter your password" autocomplete="${isSignup ? "new-password" : "current-password"}" required />
@@ -614,7 +602,7 @@ function handleAction(action, data = {}) {
     "role-member": () => setState({ profile: { ...state.profile, role: "member" }, authError: "", authMessage: "" }),
     "role-coach": () => setState({ profile: { ...state.profile, role: "coach" }, authError: "", authMessage: "" }),
     "back-to-login": () => setState({ route: "signin", authMode: "signin", authError: "", authMessage: "" }),
-    "resend-phone-code": () => resendPhoneCode(),
+    "resend-email-code": () => resendEmailCode(),
     "skip-onboarding": () => navigate("home"),
     back: () => navigate(state.user ? "home" : "signin"),
     goals: () => navigate("goals"),
@@ -639,8 +627,8 @@ async function handleForm(type, data) {
     return;
   }
 
-  if (type === "verify-phone") {
-    await verifyPhoneCode(data);
+  if (type === "verify-email") {
+    await verifyEmailCode(data);
     return;
   }
 
@@ -683,24 +671,24 @@ async function handleAuth(data) {
 
   setState({ authLoading: true, authError: "", authMessage: "" });
 
-  const phoneResult = validatePhone(data.phone.trim());
+  const emailResult = validateEmail(data.email);
   const password = data.password;
   const isSignup = state.authMode === "signup";
 
-  if (phoneResult.error) {
-    setState({ authLoading: false, authError: phoneResult.error, authMessage: "" });
+  if (emailResult.error) {
+    setState({ authLoading: false, authError: emailResult.error, authMessage: "" });
     return;
   }
 
-  const credentials = { phone: phoneResult.phone, password };
+  const credentials = { email: emailResult.email, password };
 
   const response = isSignup
     ? await supabase.auth.signUp({
         ...credentials,
         options: {
+          emailRedirectTo: window.location.origin,
           data: {
-            name: data.name || phoneResult.phone,
-            email: data.email || "",
+            name: data.name || emailResult.email.split("@")[0],
             role: data.role === "coach" ? "coach" : "member",
           },
         },
@@ -708,10 +696,6 @@ async function handleAuth(data) {
     : await supabase.auth.signInWithPassword(credentials);
 
   if (response.error) {
-    if (!isSignup && /confirm|verify|otp|code/i.test(response.error.message)) {
-      await sendPhoneOtp(phoneResult.phone, data.role, data.name);
-      return;
-    }
     setState({ authLoading: false, authError: response.error.message, authMessage: "" });
     return;
   }
@@ -720,26 +704,17 @@ async function handleAuth(data) {
     if (response.data.session) {
       await supabase.auth.signOut();
     }
-    setState({
-      authLoading: false,
-      route: "verify",
-      pendingPhone: phoneResult.phone,
-      pendingVerificationRole: data.role === "coach" ? "coach" : "member",
-      pendingVerificationName: data.name || phoneResult.phone,
-      pendingVerificationEmail: data.email || "",
-      authError: "",
-      authMessage: "Enter the 6-digit code sent to your phone.",
-    });
+    await sendEmailOtp(emailResult.email, data.role, data.name || emailResult.email.split("@")[0]);
     return;
   }
 
   if (!isSignup) {
     const verifiedUser = response.data.user;
     await supabase.auth.signOut();
-    await sendPhoneOtp(
-      phoneResult.phone,
+    await sendEmailOtp(
+      emailResult.email,
       verifiedUser?.user_metadata?.role || data.role,
-      verifiedUser?.user_metadata?.name || data.name || phoneResult.phone,
+      verifiedUser?.user_metadata?.name || data.name || emailResult.email.split("@")[0],
     );
     return;
   }
@@ -747,22 +722,33 @@ async function handleAuth(data) {
   setState({ authLoading: false, authError: "Unable to continue. Please try again.", authMessage: "" });
 }
 
-async function sendPhoneOtp(phone, role = state.profile.role, name = state.profile.name) {
+async function sendEmailOtp(email, role = state.profile.role, name = state.profile.name) {
   if (!supabase) return;
 
   const { error } = await supabase.auth.signInWithOtp({
-    phone,
+    email,
     options: {
       shouldCreateUser: false,
       data: {
-        name: name || phone,
-        email: state.pendingVerificationEmail || state.profile.email || "",
+        name: name || email.split("@")[0],
         role: role === "coach" ? "coach" : "member",
       },
     },
   });
 
   if (error) {
+    if (/confirm|verified|not found|signup/i.test(error.message)) {
+      setState({
+        authLoading: false,
+        route: "verify",
+        pendingEmail: email,
+        pendingVerificationRole: role === "coach" ? "coach" : "member",
+        pendingVerificationName: name || email.split("@")[0],
+        authError: "",
+        authMessage: "Check your email for the verification code or confirmation link.",
+      });
+      return;
+    }
     setState({ authLoading: false, authError: error.message, authMessage: "" });
     return;
   }
@@ -770,25 +756,25 @@ async function sendPhoneOtp(phone, role = state.profile.role, name = state.profi
   setState({
     authLoading: false,
     route: "verify",
-    pendingPhone: phone,
+    pendingEmail: email,
     pendingVerificationRole: role === "coach" ? "coach" : "member",
-    pendingVerificationName: name || phone,
+    pendingVerificationName: name || email.split("@")[0],
     authError: "",
-    authMessage: "Enter the 6-digit code sent to your phone.",
+    authMessage: "Enter the 6-digit code sent to your email.",
   });
 }
 
-async function resendPhoneCode() {
-  if (!state.pendingPhone) {
-    setState({ route: "signin", authError: "Enter your phone number again to request a code.", authMessage: "" });
+async function resendEmailCode() {
+  if (!state.pendingEmail) {
+    setState({ route: "signin", authError: "Enter your email again to request a code.", authMessage: "" });
     return;
   }
 
   setState({ authLoading: true, authError: "", authMessage: "" });
-  await sendPhoneOtp(state.pendingPhone, state.pendingVerificationRole, state.pendingVerificationName);
+  await sendEmailOtp(state.pendingEmail, state.pendingVerificationRole, state.pendingVerificationName);
 }
 
-async function verifyPhoneCode(data) {
+async function verifyEmailCode(data) {
   if (!supabase) {
     setState({ authError: "Add Supabase environment variables before verifying.", authMessage: "" });
     return;
@@ -803,9 +789,9 @@ async function verifyPhoneCode(data) {
   setState({ authLoading: true, authError: "", authMessage: "" });
 
   const response = await supabase.auth.verifyOtp({
-    phone: state.pendingPhone,
+    email: state.pendingEmail,
     token,
-    type: "sms",
+    type: "email",
   });
 
   if (response.error) {
@@ -819,7 +805,6 @@ async function verifyPhoneCode(data) {
     const { data: updatedUserData } = await supabase.auth.updateUser({
       data: {
         name: state.pendingVerificationName,
-        email: state.pendingVerificationEmail,
         role: state.pendingVerificationRole,
       },
     });
@@ -831,11 +816,10 @@ async function verifyPhoneCode(data) {
     user: publicUser(finalUser),
     profile: profileFromUser(finalUser),
     route: state.profile.role === "coach" ? (state.sessions.length ? "home" : "onboarding") : (state.goals.length ? "home" : "onboarding"),
-      pendingPhone: "",
-      pendingVerificationRole: "member",
-      pendingVerificationName: "",
-      pendingVerificationEmail: "",
-      authLoading: false,
+    pendingEmail: "",
+    pendingVerificationRole: "member",
+    pendingVerificationName: "",
+    authLoading: false,
     authError: "",
     authMessage: "",
   });
