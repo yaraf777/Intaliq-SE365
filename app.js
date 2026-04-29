@@ -243,7 +243,7 @@ function render() {
     return;
   }
 
-  const protectedRoutes = ["home", "activities", "goals", "sessions", "partners", "profile", "goal-form", "activity-form", "session-form", "session-detail"];
+  const protectedRoutes = ["home", "activities", "goals", "sessions", "partners", "profile", "goal-form", "goal-detail", "activity-form", "session-form", "session-detail"];
   if (protectedRoutes.includes(state.route) && !state.user) {
     state.route = "signin";
   }
@@ -259,6 +259,7 @@ function render() {
     partners: partnersView,
     profile: profileView,
     "goal-form": goalFormView,
+    "goal-detail": goalDetailView,
     "activity-form": activityFormView,
     "session-form": sessionFormView,
     "session-detail": sessionDetailView,
@@ -452,20 +453,29 @@ function memberStat(label, value, icon) {
 }
 
 function memberGoalCard(goal) {
+  const progress = goalProgress(goal);
   return `
     <article class="member-goal-card">
       <div class="member-goal-head">
-        <div class="session-mark">${interestIcon(goal.category === "Cardio" ? "Running" : "Cycling")}</div>
+        <div class="session-mark">${interestIcon(goal.type || goal.category || "Running")}</div>
         <div>
           <h3>${goal.title}</h3>
           <p>Due: ${goal.due}</p>
         </div>
-        <span>${goal.progress}%</span>
+        <span>${progress}%</span>
       </div>
+      <p>${formatDistance(goal.coveredDistance || 0)} of ${formatDistance(goal.targetDistance || 0)} km covered</p>
       <p>Progress</p>
-      <div class="member-progress" style="--value: ${goal.progress}%"><span></span></div>
+      <div class="member-progress" style="--value: ${progress}%"><span></span></div>
     </article>
   `;
+}
+
+function goalProgress(goal) {
+  if (goal.targetDistance) {
+    return clamp(Math.round((Number(goal.coveredDistance || 0) / Number(goal.targetDistance)) * 100));
+  }
+  return clamp(goal.progress);
 }
 
 function formatDistance(value) {
@@ -621,25 +631,82 @@ function goalsView() {
     `);
   }
 
+  const message = state.authMessage ? `<div class="member-toast">${state.authMessage}</div>` : "";
   return withTabs("goals", `
     <div class="topbar">
       <h1>Goals</h1>
       ${button("+ Goal", "btn-primary", "new-goal")}
     </div>
     <div class="stack">
-      ${state.goals.length ? state.goals.map((goal) => goalCard(goal)).join("") : `<div class="empty">No goals yet.</div>`}
+      ${message}
+      ${state.goals.length ? state.goals.map((goal) => goalCard(goal)).join("") : `<div class="member-empty"><strong>No goals yet.</strong><span>Set a running, hiking, or biking distance goal.</span></div>`}
     </div>
   `);
 }
 
 function goalFormView() {
   const isCoach = state.profile.role === "coach";
+  if (!isCoach) {
+    return withTabs("goals", `
+      <div class="goal-setup-screen">
+        <button class="member-view-all back-button" data-action="back">Back</button>
+        <div>
+          <h1>Set Goal</h1>
+          <p>Choose one activity type and set a distance target.</p>
+        </div>
+        <form class="activity-log-form" data-form="goal">
+          ${activityTypePicker("Running")}
+          <label class="field">
+            <span>Goal name</span>
+            <input class="input" name="title" placeholder="Running goal" required />
+          </label>
+          <label class="field">
+            <span>Due date</span>
+            <input class="input" name="due" type="date" required />
+          </label>
+          <label class="field">
+            <span>Desired distance (km)</span>
+            <input class="input" name="targetDistance" type="number" min="0.1" step="0.1" placeholder="20" required />
+          </label>
+          <button class="btn btn-primary activity-submit" type="submit">Create Goal</button>
+        </form>
+      </div>
+    `);
+  }
+
   return page(isCoach ? "New training plan" : "New goal", isCoach ? "Create a plan template with client checkpoints." : "Set a measurable goal and checkpoint flags.", `
     <form class="stack" data-form="goal">
       ${goalFields({ title: "", category: "Strength", due: "This week", progress: 0, checkpoints: ["", "", "", ""] })}
       <button class="btn btn-primary" type="submit">${isCoach ? "Create plan" : "Create goal"}</button>
       ${button("Back", "btn-ghost", "goals")}
     </form>
+  `);
+}
+
+function goalDetailView() {
+  const goal = state.goals.find((item) => item.id === state.activeGoalId) || state.goals[0];
+  if (!goal) {
+    return withTabs("goals", `<div class="member-empty"><strong>No goal selected.</strong><span>Set a goal first.</span></div>`);
+  }
+  const progress = goalProgress(goal);
+  return withTabs("goals", `
+    <div class="goal-setup-screen">
+      <button class="member-view-all back-button" data-action="goals">Back</button>
+      <div>
+        <h1>${goal.title}</h1>
+        <p>${activityLabel(goal.type || goal.category)} · Due ${goal.due}</p>
+      </div>
+      ${memberGoalCard(goal)}
+      <form class="activity-log-form" data-form="goal-progress">
+        <input type="hidden" name="id" value="${goal.id}" />
+        <label class="field">
+          <span>Distance covered now (km)</span>
+          <input class="input" name="coveredDistance" type="number" min="0" step="0.1" value="${goal.coveredDistance || 0}" required />
+        </label>
+        <div class="goal-progress-summary">${progress}% complete</div>
+        <button class="btn btn-primary activity-submit" type="submit">Update Goal</button>
+      </form>
+    </div>
   `);
 }
 
@@ -939,6 +1006,13 @@ function goalFields(goal) {
   `;
 }
 
+function goalTypeCard(goal) {
+  const type = goal.type || goal.category || "Running";
+  return `
+    <div class="session-mark">${interestIcon(type)}</div>
+  `;
+}
+
 function sessionFields() {
   return `
     <label class="field"><span>Title</span><input class="input" name="title" placeholder="${state.profile.role === "coach" ? "Strength fundamentals" : "Saturday run group"}" required /></label>
@@ -957,6 +1031,24 @@ function sessionFields() {
 }
 
 function goalCard(goal, compact = false) {
+  if (state.profile.role !== "coach") {
+    const progress = goalProgress(goal);
+    return `
+      <article class="member-goal-card goal-list-card" data-action="goal-detail" data-id="${goal.id}">
+        <div class="member-goal-head">
+          ${goalTypeCard(goal)}
+          <div>
+            <h3>${goal.title}</h3>
+            <p>${activityLabel(goal.type || goal.category)} · Due: ${goal.due}</p>
+          </div>
+          <span>${progress}%</span>
+        </div>
+        <p>${formatDistance(goal.coveredDistance || 0)} of ${formatDistance(goal.targetDistance || 0)} km covered</p>
+        <div class="member-progress" style="--value: ${progress}%"><span></span></div>
+      </article>
+    `;
+  }
+
   return `
     <article class="goal-card">
       <div class="goal-head">
@@ -1003,6 +1095,20 @@ function averageProgress() {
 }
 
 function makeGoal(data) {
+  if (state.profile.role !== "coach") {
+    return {
+      id: crypto.randomUUID(),
+      title: data.title,
+      type: data.type,
+      due: data.due,
+      targetDistance: Number(data.targetDistance),
+      coveredDistance: 0,
+      progress: 0,
+      checkpoints: [],
+      completed: 0,
+    };
+  }
+
   return {
     id: crypto.randomUUID(),
     title: data.title,
@@ -1081,6 +1187,7 @@ function handleAction(action, data = {}) {
     "mode-join": () => setState({ sessionMode: "join" }),
     "mode-mine": () => setState({ sessionMode: "mine" }),
     "session-detail": () => setState({ activeSessionId: data.id, route: "session-detail" }),
+    "goal-detail": () => setState({ activeGoalId: data.id, route: "goal-detail" }),
     "log-activity": () => navigate("activity-form"),
     "set-goal": () => navigate("goal-form"),
     "find-session": () => navigate("sessions"),
@@ -1128,12 +1235,16 @@ async function handleForm(type, data) {
     }
 
     const goal = makeGoal(data);
-    setState({ goals: [goal, ...state.goals], route: type === "onboarding" ? "home" : "goals" });
+    setState({ goals: [goal, ...state.goals], route: type === "onboarding" ? "home" : "goals", authMessage: type === "goal" ? "Goal created." : "" });
   }
 
   if (type === "activity") {
     const activity = makeActivity(data);
     setState({ activities: [activity, ...state.activities], route: "home", authMessage: "Activity logged successfully." });
+  }
+
+  if (type === "goal-progress") {
+    updateGoalProgress(data.id, data.coveredDistance);
   }
 
   if (type === "session") {
@@ -1482,11 +1593,24 @@ function connectPartner(name) {
 function advanceGoal(id) {
   const goals = state.goals.map((goal) => {
     if (goal.id !== id) return goal;
+    if (goal.targetDistance) {
+      const coveredDistance = Math.min(Number(goal.targetDistance), Number(goal.coveredDistance || 0) + 1);
+      return { ...goal, coveredDistance, progress: goalProgress({ ...goal, coveredDistance }) };
+    }
     const completed = Math.min(goal.checkpoints.length, goal.completed + 1);
     const progress = Math.max(goal.progress, Math.round((completed / goal.checkpoints.length) * 100));
     return { ...goal, completed, progress };
   });
   setState({ goals });
+}
+
+function updateGoalProgress(id, coveredDistance) {
+  const goals = state.goals.map((goal) => {
+    if (goal.id !== id) return goal;
+    const distance = Math.max(0, Math.min(Number(goal.targetDistance || 0), Number(coveredDistance) || 0));
+    return { ...goal, coveredDistance: distance, progress: goalProgress({ ...goal, coveredDistance: distance }) };
+  });
+  setState({ goals, route: "goals", activeGoalId: id, authMessage: "Goal progress updated." });
 }
 
 async function initAuth() {

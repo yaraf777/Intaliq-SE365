@@ -830,6 +830,37 @@ button {
   gap: 18px;
 }
 
+.goal-setup-screen {
+  display: grid;
+  gap: 18px;
+}
+
+.goal-setup-screen h1 {
+  margin: 0;
+  color: #fff;
+  font-size: 26px;
+  line-height: 1.1;
+}
+
+.goal-setup-screen p {
+  margin: 7px 0 0;
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 15px;
+}
+
+.goal-list-card {
+  cursor: pointer;
+}
+
+.goal-progress-summary {
+  padding: 11px 12px;
+  border-radius: 10px;
+  background: rgba(199, 255, 79, 0.16);
+  color: #c7ff4f;
+  font-weight: 900;
+  text-align: center;
+}
+
 .activity-log-screen h1 {
   margin: 0;
   color: #fff;
