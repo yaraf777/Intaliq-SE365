@@ -31,8 +31,10 @@ const seedState = {
     specialty: "",
     age: "",
     showAge: "true",
+    birthdate: "",
     city: "Jeddah",
     nationality: "",
+    avatarUrl: "",
     bio: "",
   },
   goals: [],
@@ -92,8 +94,13 @@ function navigate(route) {
   setState({ route });
 }
 
-function formData(form) {
+async function formData(form) {
   const values = Object.fromEntries(new FormData(form).entries());
+  const avatarFile = new FormData(form).get("avatarFile");
+  if (avatarFile instanceof File && avatarFile.size) {
+    values.avatarUrl = await fileToDataUrl(avatarFile);
+  }
+  delete values.avatarFile;
   const interests = new FormData(form).getAll("interests");
   if (interests.length) {
     values.primaryGoal = interests.join(", ");
@@ -103,6 +110,15 @@ function formData(form) {
     values.specialty = specialties.join(", ");
   }
   return values;
+}
+
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => resolve(reader.result));
+    reader.addEventListener("error", reject);
+    reader.readAsDataURL(file);
+  });
 }
 
 function validateEmail(value) {
@@ -130,8 +146,10 @@ function profileFromUser(user) {
     specialty: meta.specialty || "",
     age: meta.age || "",
     showAge: meta.showAge ?? "true",
+    birthdate: meta.birthdate || "",
     city: meta.city || "Jeddah",
     nationality: meta.nationality || "",
+    avatarUrl: meta.avatarUrl || "",
     bio: meta.bio || "",
   };
 }
@@ -512,6 +530,30 @@ function activityDateLabel(value) {
 
 function activityLabel(type) {
   return type === "Cycling" ? "Bike" : type === "Running" ? "Run" : "Hike";
+}
+
+function profileAge(profile = state.profile) {
+  if (profile.birthdate) {
+    const birth = new Date(profile.birthdate);
+    const today = new Date();
+    let age = today.getFullYear() - birth.getFullYear();
+    const hasBirthdayPassed = today.getMonth() > birth.getMonth() || (today.getMonth() === birth.getMonth() && today.getDate() >= birth.getDate());
+    if (!hasBirthdayPassed) age -= 1;
+    return age > 0 ? String(age) : "";
+  }
+  return profile.age || "";
+}
+
+function profileAvatar() {
+  if (state.profile.avatarUrl) {
+    return `<div class="profile-user-icon has-photo"><img src="${state.profile.avatarUrl}" alt="${state.profile.name || "Profile"} profile picture" /></div>`;
+  }
+  return `
+    <div class="profile-user-icon">
+      <span></span>
+      <strong></strong>
+    </div>
+  `;
 }
 
 function activityCard(activity) {
@@ -929,7 +971,8 @@ function profileDetailView() {
   const message = state.authMessage ? `<div class="member-toast">${state.authMessage}</div>` : "";
   const handle = `@${(state.profile.email || "user@intaliq.app").split("@")[0]}`;
   const city = state.profile.city || "Jeddah";
-  const ageVisible = state.profile.showAge !== "false" && state.profile.age;
+  const age = profileAge();
+  const ageVisible = state.profile.showAge !== "false" && age;
   const nationality = nationalityOptions().find((item) => item.value === state.profile.nationality);
   const interests = selectedInterests(state.profile.primaryGoal);
   return withTabs("profile", `
@@ -937,15 +980,12 @@ function profileDetailView() {
       <button class="member-view-all back-button" data-action="profile-menu">Back</button>
       ${message}
       <div class="profile-sketch-head">
-        <div class="profile-user-icon">
-          <span></span>
-          <strong></strong>
-        </div>
+        ${profileAvatar()}
         <h1>${name}</h1>
         <p>${handle} <span>|</span> ${city}</p>
       </div>
       <div class="profile-info-grid">
-        <div><strong>${ageVisible ? `${state.profile.age}` : "Hidden"}</strong><span>Age</span></div>
+        <div><strong>${ageVisible ? age : "Hidden"}</strong><span>Age</span></div>
         <div><strong class="profile-interest-icons">${interests.length ? interests.map((item) => interestIcon(item)).join("") : "—"}</strong><span>Interest</span></div>
         <div><strong>${city}</strong><span>City</span></div>
         <div><strong>${nationality ? nationality.flag : "🌐"}</strong><span>${nationality ? nationality.label : "Nationality"}</span></div>
@@ -1001,18 +1041,25 @@ function nationalityOptions() {
 
 function profileEditView() {
   const message = state.authMessage ? `<div class="member-toast">${state.authMessage}</div>` : "";
+  const error = state.authError ? `<div class="notice danger-box">${state.authError}</div>` : "";
   return withTabs("profile", `
     <div class="profile-edit-screen">
       <button class="member-view-all back-button" data-action="view-profile">Back</button>
       <div>
         <h1>Edit Profile</h1>
-        <p>Choose what appears on your public profile.</p>
+        <p>Update your account details and public profile.</p>
       </div>
       ${message}
+      ${error}
       <form class="activity-log-form" data-form="profile">
-        <label class="field"><span>Name</span><input class="input" name="name" value="${state.profile.name}" required /></label>
+        <label class="profile-photo-picker">
+          ${profileAvatar()}
+          <span>Profile picture</span>
+          <input name="avatarFile" type="file" accept="image/*" />
+        </label>
+        <label class="field"><span>Full name</span><input class="input" name="name" value="${state.profile.name}" required /></label>
         <label class="field"><span>Email</span><input class="input" name="email" type="email" value="${state.profile.email}" required /></label>
-        <label class="field"><span>Age</span><input class="input" name="age" type="number" min="13" max="100" value="${state.profile.age}" placeholder="20" /></label>
+        <label class="field"><span>Birthdate</span><input class="input" name="birthdate" type="date" value="${state.profile.birthdate}" /></label>
         <label class="toggle-row">
           <input type="hidden" name="showAge" value="false" />
           <input type="checkbox" name="showAge" value="true" ${state.profile.showAge !== "false" ? "checked" : ""} />
@@ -1020,7 +1067,7 @@ function profileEditView() {
         </label>
         ${interestPicker(state.profile.primaryGoal)}
         <label class="field">
-          <span>City</span>
+          <span>Location</span>
           <select class="select" name="city">
             ${cityOptions().map((city) => `<option value="${city}" ${city === state.profile.city ? "selected" : ""}>${city}</option>`).join("")}
           </select>
@@ -1034,8 +1081,9 @@ function profileEditView() {
         <input type="hidden" name="role" value="${state.profile.role}" />
         <input type="hidden" name="fitnessLevel" value="${state.profile.fitnessLevel}" />
         <input type="hidden" name="specialty" value="${state.profile.specialty}" />
+        <label class="field"><span>New password</span><input class="input" name="password" type="password" minlength="6" placeholder="Leave blank to keep current password" autocomplete="new-password" /></label>
         <label class="field"><span>Bio</span><textarea class="textarea" name="bio">${state.profile.bio}</textarea></label>
-        <button class="btn btn-primary activity-submit" type="submit">Save Profile</button>
+        <button class="btn btn-primary activity-submit" type="submit">Update Profile</button>
       </form>
     </div>
   `);
@@ -1342,7 +1390,7 @@ function bindEvents() {
   app.querySelectorAll("[data-form]").forEach((form) => {
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
-      await handleForm(form.dataset.form, formData(form));
+      await handleForm(form.dataset.form, await formData(form));
     });
   });
 }
@@ -1688,13 +1736,18 @@ async function signOut() {
 }
 
 async function updateProfile(data) {
+  const password = data.password?.trim();
+  const profileData = { ...data };
+  delete profileData.password;
   const nextProfile = {
     ...state.profile,
-    ...data,
-    age: data.age || "",
-    showAge: data.showAge === "true" ? "true" : "false",
-    city: data.city || "Jeddah",
-    nationality: data.nationality || "",
+    ...profileData,
+    age: profileAge({ ...state.profile, ...profileData }),
+    showAge: profileData.showAge === "true" ? "true" : "false",
+    birthdate: profileData.birthdate || "",
+    city: profileData.city || "Jeddah",
+    nationality: profileData.nationality || "",
+    avatarUrl: profileData.avatarUrl || state.profile.avatarUrl || "",
   };
   if (supabase && state.user) {
     const update = {
@@ -1706,14 +1759,20 @@ async function updateProfile(data) {
         specialty: nextProfile.specialty,
         age: nextProfile.age,
         showAge: nextProfile.showAge,
+        birthdate: nextProfile.birthdate,
         city: nextProfile.city,
         nationality: nextProfile.nationality,
+        avatarUrl: nextProfile.avatarUrl,
         bio: nextProfile.bio,
       },
     };
 
     if (nextProfile.email !== state.profile.email) {
       update.email = nextProfile.email;
+    }
+
+    if (password) {
+      update.password = password;
     }
 
     const { error } = await supabase.auth.updateUser(update);

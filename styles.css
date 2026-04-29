@@ -945,6 +945,17 @@ button {
   background: rgba(255, 255, 255, 0.82);
 }
 
+.profile-user-icon.has-photo {
+  background: #050505;
+}
+
+.profile-user-icon img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
 .profile-user-icon span {
   position: absolute;
   width: 42px;
@@ -1080,6 +1091,32 @@ button {
   margin: 6px 0 0;
   color: rgba(255, 255, 255, 0.72);
   font-size: 15px;
+  font-weight: 700;
+}
+
+.profile-photo-picker {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 14px;
+  border: 2px dashed rgba(199, 255, 79, 0.58);
+  border-radius: 16px;
+  background: rgba(0, 0, 0, 0.14);
+  color: rgba(255, 255, 255, 0.88);
+  font-weight: 900;
+  text-align: center;
+}
+
+.profile-photo-picker .profile-user-icon {
+  width: 104px;
+  height: 104px;
+  border-color: #c7ff4f;
+}
+
+.profile-photo-picker input {
+  width: 100%;
+  max-width: 220px;
+  color: rgba(255, 255, 255, 0.78);
   font-weight: 700;
 }
 
