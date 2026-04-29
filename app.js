@@ -192,7 +192,7 @@ function routeForProfile(profile = state.profile) {
 }
 
 function routeAllowedForRole(route, role = state.profile.role) {
-  const coachOnly = new Set(["events", "activities", "stats", "history", "goal-form", "goal-detail", "activity-form"]);
+  const coachOnly = new Set(["activities", "stats", "history", "goal-form", "goal-detail", "activity-form"]);
   const memberOnly = new Set([]);
   if (role === "coach") return !coachOnly.has(route);
   return !memberOnly.has(route);
@@ -587,13 +587,15 @@ function eventNotificationsByType() {
     Hiking: [],
     Cycling: [],
   };
+  const relevantSessions = state.profile.role === "coach"
+    ? state.sessions
+    : state.sessions.filter((session) => state.joinedSessions.includes(session.id));
 
-  state.sessions
-    .filter((session) => state.joinedSessions.includes(session.id))
+  relevantSessions
     .forEach((session) => {
       const type = groups[session.type] ? session.type : "Running";
       groups[type].push({
-        title: "Booked session",
+        title: state.profile.role === "coach" ? "Your session" : "Booked session",
         message: `${session.title} is scheduled for ${session.date} at ${session.time}.`,
         meta: session.level || "All levels",
       });
@@ -1601,6 +1603,7 @@ function withTabs(active, body) {
         ${isCoach
           ? `
             ${tab("home", "⌂", "Home", active)}
+            ${tab("events", "!", "Events", active)}
             ${tab("sessions", "●●●", "Sessions", active)}
             ${tab("goals", "↟", "Admissions", active)}
             ${tab("partners", "◔", "Announce", active)}
