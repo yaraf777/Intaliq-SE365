@@ -274,7 +274,7 @@ function render() {
     return;
   }
 
-  const protectedRoutes = ["home", "activities", "stats", "history", "requests", "goals", "sessions", "partners", "friend-chat", "profile", "profile-detail", "profile-edit", "ai-chat", "goal-form", "goal-detail", "activity-form", "session-form", "session-detail"];
+  const protectedRoutes = ["home", "activities", "stats", "history", "requests", "goals", "sessions", "partners", "find-partners", "friend-chat", "profile", "profile-detail", "profile-edit", "ai-chat", "goal-form", "goal-detail", "activity-form", "session-form", "session-detail"];
   if (protectedRoutes.includes(state.route) && !state.user) {
     state.route = "signin";
   }
@@ -291,6 +291,7 @@ function render() {
     goals: goalsView,
     sessions: sessionsView,
     partners: partnersView,
+    "find-partners": findPartnersView,
     "friend-chat": friendChatView,
     profile: profileView,
     "profile-detail": profileDetailView,
@@ -1065,54 +1066,22 @@ function sessionDetailView() {
 }
 
 function profileView() {
-  if (state.profile.role !== "coach") {
-    const message = state.authMessage ? `<div class="member-toast">${state.authMessage}</div>` : "";
-    return withTabs("profile", `
-      <div class="more-menu-screen">
-        <div>
-          <h1>More</h1>
-          <p>Manage your account and support options.</p>
-        </div>
-        ${message}
-        <div class="more-menu-list">
-          ${moreMenuRow("◉", "View Profile", "view-profile")}
-          ${moreMenuRow("◇", "Find Partners", "find-partners")}
-          ${moreMenuRow("✦", "Chat with AI", "chat-ai")}
-          ${moreMenuRow("?", "Help", "help", "intaliqsupport@gmail.com", false)}
-          ${moreMenuRow("↩", "Log out", "signout")}
-        </div>
-      </div>
-    `);
-  }
-
-  const message = state.authMessage ? `<div class="notice">${state.authMessage}</div>` : "";
-  const error = state.authError ? `<div class="notice danger-box">${state.authError}</div>` : "";
-  const isCoach = state.profile.role === "coach";
+  const message = state.authMessage ? `<div class="member-toast">${state.authMessage}</div>` : "";
   return withTabs("profile", `
-    <div class="topbar">
-      <h1>Profile</h1>
-      <button class="btn-link danger" data-action="signout">Sign out</button>
-    </div>
-    <form class="stack" data-form="profile">
-      ${message}
-      ${error}
-      <div class="profile-row card">
-        <div class="avatar">${initials(state.profile.name || (isCoach ? "Coach" : "User"))}</div>
-        <div>
-          <strong>${state.profile.name || (isCoach ? "New coach" : "New user")}</strong>
-          <div class="subtle">${isCoach ? "Coach" : "User"} · ${state.profile.email}</div>
-        </div>
+    <div class="more-menu-screen">
+      <div>
+        <h1>More</h1>
+        <p>Manage your account and support options.</p>
       </div>
-      <label class="field"><span>Name</span><input class="input" name="name" value="${state.profile.name}" required /></label>
-      <label class="field"><span>Email</span><input class="input" name="email" type="email" value="${state.profile.email}" required /></label>
-      <label class="field"><span>Account type</span><select class="select" name="role">${["member", "coach"].map((role) => `<option value="${role}" ${role === state.profile.role ? "selected" : ""}>${role === "coach" ? "Coach" : "User"}</option>`).join("")}</select></label>
-      ${isCoach
-        ? `<label class="field"><span>Specialty</span><input class="input" name="specialty" value="${state.profile.specialty}" placeholder="Strength, mobility, nutrition" /></label>`
-        : `<label class="field"><span>Primary goal</span><input class="input" name="primaryGoal" value="${state.profile.primaryGoal}" placeholder="Build strength, lose weight, run 5K" /></label>`}
-      ${isCoach ? "" : `<label class="field"><span>Fitness level</span><select class="select" name="fitnessLevel">${["Beginner", "Intermediate", "Advanced"].map((level) => `<option ${level === state.profile.fitnessLevel ? "selected" : ""}>${level}</option>`).join("")}</select></label>`}
-      <label class="field"><span>Bio</span><textarea class="textarea" name="bio">${state.profile.bio}</textarea></label>
-      <button class="btn btn-primary" type="submit">Update profile</button>
-    </form>
+      ${message}
+      <div class="more-menu-list">
+        ${moreMenuRow("◉", "View Profile", "view-profile")}
+        ${moreMenuRow("◇", "Find Partners", "find-partners")}
+        ${moreMenuRow("✦", "Chat with AI", "chat-ai")}
+        ${moreMenuRow("?", "Help", "help", "intaliqsupport@gmail.com", false)}
+        ${moreMenuRow("↩", "Log out", "signout")}
+      </div>
+    </div>
   `);
 }
 
@@ -1299,13 +1268,17 @@ function partnersView() {
     `);
   }
 
+  return findPartnersView();
+}
+
+function findPartnersView() {
   const query = state.partnerSearch.trim().toLowerCase();
   const partners = state.partnerDirectory.filter((partner) => {
     const searchable = [partner.name, partner.city, partner.primaryGoal, partner.role].join(" ").toLowerCase();
     return !query || searchable.includes(query);
   });
 
-  return withTabs("partners", `
+  return withTabs("profile", `
     <div class="topbar">
       <h1>Find Partners</h1>
     </div>
@@ -2045,7 +2018,7 @@ function addAnnouncement(id, announcement) {
 }
 
 async function openFindPartners() {
-  setState({ route: "partners", authMessage: "" });
+  setState({ route: "find-partners", authMessage: "" });
   await loadPartnerDirectory();
 }
 
