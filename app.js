@@ -782,7 +782,7 @@ function coachUpcomingCard(session) {
         </div>
         <p>Coach ${state.profile.name || "Intaliq"}</p>
         <p>${session.date} at ${session.time}</p>
-        <p>${session.notes || "Focused workout session."}</p>
+        <p>${session.location || session.notes || "Focused workout session."}</p>
         <p>${session.members.length}/${session.capacity} enrolled - ${remaining} spot${remaining === 1 ? "" : "s"} left</p>
       </div>
     </article>
@@ -1064,12 +1064,24 @@ function sessionFormView() {
     `);
   }
 
-  return page("Create session", state.profile.role === "coach" ? "Schedule a coaching session for users to join." : "Open a focused workout around one goal or topic.", `
-    <form class="stack" data-form="session">
-      ${sessionFields()}
-      <button class="btn btn-primary" type="submit">Create session</button>
-      ${button("Back", "btn-ghost", "sessions")}
-    </form>
+  return withTabs("sessions", `
+    <div class="coach-session-form-screen">
+      <div class="coach-form-topbar">
+        <button class="member-view-all back-button" data-action="sessions">← Back</button>
+        <button class="coach-logout" data-action="signout">Logout</button>
+      </div>
+      <form class="coach-session-form-card" data-form="session">
+        <div>
+          <h1>Create Group Session</h1>
+          <p>Set up a new session for members to join</p>
+        </div>
+        ${sessionFields()}
+        <div class="coach-form-actions">
+          <button class="btn btn-primary activity-submit" type="submit">Create Session</button>
+          <button class="btn btn-ghost" type="button" data-action="sessions">Cancel</button>
+        </div>
+      </form>
+    </div>
   `);
 }
 
@@ -1465,18 +1477,15 @@ function goalTypeCard(goal) {
 
 function sessionFields() {
   return `
-    <label class="field"><span>Title</span><input class="input" name="title" placeholder="${state.profile.role === "coach" ? "Strength fundamentals" : "Saturday run group"}" required /></label>
-    <label class="field"><span>Type</span><select class="select" name="type"><option>Strength</option><option>Cardio</option><option>Mobility</option><option>HIIT</option><option>Yoga</option><option>Nutrition</option></select></label>
-    <div class="grid-2">
-      <label class="field"><span>Level</span><select class="select" name="level"><option>Beginner</option><option>Intermediate</option><option>Advanced</option></select></label>
-      <label class="field"><span>Admission</span><select class="select" name="admission"><option>Open</option><option>Approval required</option></select></label>
-    </div>
-    <div class="grid-2">
-      <label class="field"><span>Date</span><input class="input" name="date" value="Today" required /></label>
-      <label class="field"><span>Time</span><input class="input" name="time" value="6:00 PM" required /></label>
-    </div>
-    <label class="field"><span>Capacity</span><input class="input" name="capacity" type="number" min="2" max="20" value="6" required /></label>
-    <label class="field"><span>Notes</span><textarea class="textarea" name="notes" placeholder="What will the session focus on?"></textarea></label>
+    ${activityTypePicker("Running")}
+    <label class="field"><span>Session Title</span><input class="input" name="title" placeholder="e.g., Morning Run Crew" required /></label>
+    <label class="field"><span>Date</span><input class="input" name="date" type="date" required /></label>
+    <label class="field"><span>Time</span><input class="input" name="time" type="time" required /></label>
+    <label class="field"><span>Capacity</span><input class="input" name="capacity" type="number" min="2" max="50" placeholder="Maximum participants" required /></label>
+    <label class="field"><span>Location</span><input class="input" name="location" placeholder="e.g., King Abdullah Park, Riyadh" required /></label>
+    <label class="field"><span>Intensity Level</span><select class="select" name="level"><option>Beginner</option><option>Intermediate</option><option>Advanced</option></select></label>
+    <label class="field"><span>Description</span><input class="input" name="notes" placeholder="e.g., any requirements, or expectations" /></label>
+    <input type="hidden" name="admission" value="Approval required" />
   `;
 }
 
@@ -1596,6 +1605,7 @@ function makeSession(data) {
     date: data.date,
     time: data.time,
     capacity: Number(data.capacity),
+    location: data.location || "",
     members: [state.profile.name || "Host"],
     pendingApplicants: data.admission === "Approval required" ? ["A new user"] : [],
     announcements: [],
