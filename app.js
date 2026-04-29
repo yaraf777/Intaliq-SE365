@@ -391,13 +391,13 @@ function signInView() {
             ${specialtyPicker(state.profile.specialty)}
           ` : `
             ${interestPicker(state.profile.primaryGoal)}
+            <label class="field">
+              <span>Fitness level</span>
+              <select class="select auth-input" name="fitnessLevel">
+                ${["Beginner", "Intermediate", "Advanced"].map((level) => `<option ${level === state.profile.fitnessLevel ? "selected" : ""}>${level}</option>`).join("")}
+              </select>
+            </label>
           `}
-          <label class="field">
-            <span>Fitness level</span>
-            <select class="select auth-input" name="fitnessLevel">
-              ${["Beginner", "Intermediate", "Advanced"].map((level) => `<option ${level === state.profile.fitnessLevel ? "selected" : ""}>${level}</option>`).join("")}
-            </select>
-          </label>
         ` : ""}
         <label class="field">
           <span>Email</span>
@@ -1109,7 +1109,7 @@ function profileView() {
       ${isCoach
         ? `<label class="field"><span>Specialty</span><input class="input" name="specialty" value="${state.profile.specialty}" placeholder="Strength, mobility, nutrition" /></label>`
         : `<label class="field"><span>Primary goal</span><input class="input" name="primaryGoal" value="${state.profile.primaryGoal}" placeholder="Build strength, lose weight, run 5K" /></label>`}
-      <label class="field"><span>Fitness level</span><select class="select" name="fitnessLevel">${["Beginner", "Intermediate", "Advanced"].map((level) => `<option ${level === state.profile.fitnessLevel ? "selected" : ""}>${level}</option>`).join("")}</select></label>
+      ${isCoach ? "" : `<label class="field"><span>Fitness level</span><select class="select" name="fitnessLevel">${["Beginner", "Intermediate", "Advanced"].map((level) => `<option ${level === state.profile.fitnessLevel ? "selected" : ""}>${level}</option>`).join("")}</select></label>`}
       <label class="field"><span>Bio</span><textarea class="textarea" name="bio">${state.profile.bio}</textarea></label>
       <button class="btn btn-primary" type="submit">Update profile</button>
     </form>
