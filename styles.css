@@ -845,7 +845,13 @@ button {
   gap: 18px;
 }
 
-.stats-period-tabs {
+.history-screen {
+  display: grid;
+  gap: 18px;
+}
+
+.stats-period-tabs,
+.history-tabs {
   min-height: 58px;
   padding: 4px;
   border: 3px solid #050505;
@@ -856,7 +862,12 @@ button {
   background: rgba(255, 255, 255, 0.88);
 }
 
-.stats-period-tabs button {
+.history-tabs {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.stats-period-tabs button,
+.history-tabs button {
   min-width: 0;
   border: 2px solid transparent;
   border-radius: 12px;
@@ -866,7 +877,8 @@ button {
   font-weight: 900;
 }
 
-.stats-period-tabs button.active {
+.stats-period-tabs button.active,
+.history-tabs button.active {
   border-color: rgba(5, 5, 5, 0.14);
   background: #7fc943;
   color: #050505;

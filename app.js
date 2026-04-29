@@ -22,6 +22,7 @@ const seedState = {
   pendingSpecialty: "",
   sessionMode: "join",
   statsPeriod: "Day",
+  historyTab: "sessions",
   user: null,
   profile: {
     name: "",
@@ -272,7 +273,7 @@ function render() {
     return;
   }
 
-  const protectedRoutes = ["home", "activities", "stats", "goals", "sessions", "partners", "friend-chat", "profile", "profile-detail", "profile-edit", "ai-chat", "goal-form", "goal-detail", "activity-form", "session-form", "session-detail"];
+  const protectedRoutes = ["home", "activities", "stats", "history", "goals", "sessions", "partners", "friend-chat", "profile", "profile-detail", "profile-edit", "ai-chat", "goal-form", "goal-detail", "activity-form", "session-form", "session-detail"];
   if (protectedRoutes.includes(state.route) && !state.user) {
     state.route = "signin";
   }
@@ -284,6 +285,7 @@ function render() {
     home: homeView,
     activities: activitiesView,
     stats: statsView,
+    history: historyView,
     goals: goalsView,
     sessions: sessionsView,
     partners: partnersView,
@@ -853,6 +855,51 @@ function statsView() {
   `);
 }
 
+function historyTabs(activeTab) {
+  return `
+    <div class="history-tabs" role="tablist" aria-label="History tabs">
+      ${["sessions", "requests"].map((tabName) => `
+        <button class="${activeTab === tabName ? "active" : ""}" data-action="set-history-tab" data-tab="${tabName}" type="button">${tabName === "sessions" ? "Sessions" : "Requests"}</button>
+      `).join("")}
+    </div>
+  `;
+}
+
+function historyView() {
+  const activeTab = state.historyTab || "sessions";
+  const bookedSessions = state.sessions.filter((session) => state.joinedSessions.includes(session.id));
+  const partnerRequests = state.partners;
+
+  return withTabs("profile", `
+    <div class="history-screen">
+      <button class="member-view-all back-button" data-action="view-profile">Back</button>
+      <div class="member-page-topbar requests-head">
+        <h1>History</h1>
+        <p>${activeTab === "sessions" ? `${bookedSessions.length} booked session${bookedSessions.length === 1 ? "" : "s"}` : `${partnerRequests.length} partner request${partnerRequests.length === 1 ? "" : "s"}`}</p>
+      </div>
+      ${historyTabs(activeTab)}
+      <div class="stack">
+        ${activeTab === "sessions"
+          ? bookedSessions.length
+            ? bookedSessions.map((session) => sessionCard(session)).join("")
+            : `<div class="member-empty"><strong>No booked sessions yet.</strong><span>Sessions you book will appear here.</span></div>`
+          : partnerRequests.length
+            ? partnerRequests.map((name) => `
+              <button class="friend-row" data-action="open-friend-chat" data-name="${name}">
+                <span class="friend-avatar">${initials(name)}</span>
+                <span>
+                  <strong>${name}</strong>
+                  <small>Partner request connected</small>
+                </span>
+                <b>›</b>
+              </button>
+            `).join("")
+            : `<div class="member-empty"><strong>No partner requests yet.</strong><span>People you request or connect with will appear here.</span></div>`}
+      </div>
+    </div>
+  `);
+}
+
 function activityFormView() {
   return withTabs("activities", `
     <div class="activity-log-screen">
@@ -1072,7 +1119,7 @@ function profileDetailView() {
         ${profileSketchRow("◇", "Friends", "find-partners")}
         ${profileSketchRow("✦", "Requests", "sessions")}
         ${profileSketchRow("↗", "My stats", "stats")}
-        ${profileSketchRow("◷", "History", "activities")}
+        ${profileSketchRow("◷", "History", "history")}
       </div>
     </div>
   `);
@@ -1523,6 +1570,7 @@ function handleAction(action, data = {}) {
     "mode-join": () => setState({ sessionMode: "join" }),
     "mode-mine": () => setState({ sessionMode: "mine" }),
     "set-stats-period": () => setState({ statsPeriod: data.period || "Day" }),
+    "set-history-tab": () => setState({ historyTab: data.tab || "sessions" }),
     "session-detail": () => setState({ activeSessionId: data.id, route: "session-detail" }),
     "goal-detail": () => setState({ activeGoalId: data.id, route: "goal-detail" }),
     "log-activity": () => navigate("activity-form"),
