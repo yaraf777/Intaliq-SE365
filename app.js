@@ -29,6 +29,10 @@ const seedState = {
     fitnessLevel: "Beginner",
     primaryGoal: "",
     specialty: "",
+    age: "",
+    showAge: "true",
+    city: "Jeddah",
+    nationality: "",
     bio: "",
   },
   goals: [],
@@ -124,6 +128,10 @@ function profileFromUser(user) {
     fitnessLevel: meta.fitnessLevel || "Beginner",
     primaryGoal: meta.primaryGoal || "",
     specialty: meta.specialty || "",
+    age: meta.age || "",
+    showAge: meta.showAge ?? "true",
+    city: meta.city || "Jeddah",
+    nationality: meta.nationality || "",
     bio: meta.bio || "",
   };
 }
@@ -243,7 +251,7 @@ function render() {
     return;
   }
 
-  const protectedRoutes = ["home", "activities", "goals", "sessions", "partners", "profile", "profile-detail", "ai-chat", "goal-form", "goal-detail", "activity-form", "session-form", "session-detail"];
+  const protectedRoutes = ["home", "activities", "goals", "sessions", "partners", "profile", "profile-detail", "profile-edit", "ai-chat", "goal-form", "goal-detail", "activity-form", "session-form", "session-detail"];
   if (protectedRoutes.includes(state.route) && !state.user) {
     state.route = "signin";
   }
@@ -259,6 +267,7 @@ function render() {
     partners: partnersView,
     profile: profileView,
     "profile-detail": profileDetailView,
+    "profile-edit": profileEditView,
     "ai-chat": aiChatView,
     "goal-form": goalFormView,
     "goal-detail": goalDetailView,
@@ -919,12 +928,10 @@ function profileDetailView() {
   const name = state.profile.name || "New user";
   const message = state.authMessage ? `<div class="member-toast">${state.authMessage}</div>` : "";
   const handle = `@${(state.profile.email || "user@intaliq.app").split("@")[0]}`;
-  const totalDistance = state.activities.reduce((total, activity) => total + Number(activity.distance || 0), 0);
-  const stats = [
-    { value: state.activities.length || 0, label: "Activities" },
-    { value: `${formatDistance(totalDistance)} km`, label: "Distance" },
-    { value: `${averageProgress()}%`, label: "Goals" },
-  ];
+  const city = state.profile.city || "Jeddah";
+  const ageVisible = state.profile.showAge !== "false" && state.profile.age;
+  const nationality = nationalityOptions().find((item) => item.value === state.profile.nationality);
+  const interests = selectedInterests(state.profile.primaryGoal);
   return withTabs("profile", `
     <div class="profile-sketch-screen">
       <button class="member-view-all back-button" data-action="profile-menu">Back</button>
@@ -935,10 +942,13 @@ function profileDetailView() {
           <strong></strong>
         </div>
         <h1>${name}</h1>
-        <p>${handle} <span>|</span> Jeddah</p>
+        <p>${handle} <span>|</span> ${city}</p>
       </div>
-      <div class="profile-stat-strip">
-        ${stats.map((item) => `<div><strong>${item.value}</strong><span>${item.label}</span></div>`).join("")}
+      <div class="profile-info-grid">
+        <div><strong>${ageVisible ? `${state.profile.age}` : "Hidden"}</strong><span>Age</span></div>
+        <div><strong class="profile-interest-icons">${interests.length ? interests.map((item) => interestIcon(item)).join("") : "—"}</strong><span>Interest</span></div>
+        <div><strong>${city}</strong><span>City</span></div>
+        <div><strong>${nationality ? nationality.flag : "🌐"}</strong><span>${nationality ? nationality.label : "Nationality"}</span></div>
       </div>
       <div class="profile-sketch-list">
         ${profileSketchRow("◉", "Profile", "view-profile-edit")}
@@ -961,6 +971,74 @@ function profileSketchRow(icon, label, action, meta = "") {
       <b>›</b>
     </button>
   `;
+}
+
+function cityOptions() {
+  return ["Riyadh", "Jeddah", "Tabuk", "Mecca", "Madina"];
+}
+
+function nationalityOptions() {
+  return [
+    { value: "", label: "Not set", flag: "🌐" },
+    { value: "Saudi Arabia", label: "Saudi Arabia", flag: "🇸🇦" },
+    { value: "Egypt", label: "Egypt", flag: "🇪🇬" },
+    { value: "United Arab Emirates", label: "United Arab Emirates", flag: "🇦🇪" },
+    { value: "Kuwait", label: "Kuwait", flag: "🇰🇼" },
+    { value: "Bahrain", label: "Bahrain", flag: "🇧🇭" },
+    { value: "Qatar", label: "Qatar", flag: "🇶🇦" },
+    { value: "Oman", label: "Oman", flag: "🇴🇲" },
+    { value: "Jordan", label: "Jordan", flag: "🇯🇴" },
+    { value: "Lebanon", label: "Lebanon", flag: "🇱🇧" },
+    { value: "Palestine", label: "Palestine", flag: "🇵🇸" },
+    { value: "Yemen", label: "Yemen", flag: "🇾🇪" },
+    { value: "Pakistan", label: "Pakistan", flag: "🇵🇰" },
+    { value: "India", label: "India", flag: "🇮🇳" },
+    { value: "Philippines", label: "Philippines", flag: "🇵🇭" },
+    { value: "United States", label: "United States", flag: "🇺🇸" },
+    { value: "United Kingdom", label: "United Kingdom", flag: "🇬🇧" },
+  ];
+}
+
+function profileEditView() {
+  const message = state.authMessage ? `<div class="member-toast">${state.authMessage}</div>` : "";
+  return withTabs("profile", `
+    <div class="profile-edit-screen">
+      <button class="member-view-all back-button" data-action="view-profile">Back</button>
+      <div>
+        <h1>Edit Profile</h1>
+        <p>Choose what appears on your public profile.</p>
+      </div>
+      ${message}
+      <form class="activity-log-form" data-form="profile">
+        <label class="field"><span>Name</span><input class="input" name="name" value="${state.profile.name}" required /></label>
+        <label class="field"><span>Email</span><input class="input" name="email" type="email" value="${state.profile.email}" required /></label>
+        <label class="field"><span>Age</span><input class="input" name="age" type="number" min="13" max="100" value="${state.profile.age}" placeholder="20" /></label>
+        <label class="toggle-row">
+          <input type="hidden" name="showAge" value="false" />
+          <input type="checkbox" name="showAge" value="true" ${state.profile.showAge !== "false" ? "checked" : ""} />
+          <span>Display age on profile</span>
+        </label>
+        ${interestPicker(state.profile.primaryGoal)}
+        <label class="field">
+          <span>City</span>
+          <select class="select" name="city">
+            ${cityOptions().map((city) => `<option value="${city}" ${city === state.profile.city ? "selected" : ""}>${city}</option>`).join("")}
+          </select>
+        </label>
+        <label class="field">
+          <span>Nationality</span>
+          <select class="select" name="nationality">
+            ${nationalityOptions().map((item) => `<option value="${item.value}" ${item.value === state.profile.nationality ? "selected" : ""}>${item.flag} ${item.label}</option>`).join("")}
+          </select>
+        </label>
+        <input type="hidden" name="role" value="${state.profile.role}" />
+        <input type="hidden" name="fitnessLevel" value="${state.profile.fitnessLevel}" />
+        <input type="hidden" name="specialty" value="${state.profile.specialty}" />
+        <label class="field"><span>Bio</span><textarea class="textarea" name="bio">${state.profile.bio}</textarea></label>
+        <button class="btn btn-primary activity-submit" type="submit">Save Profile</button>
+      </form>
+    </div>
+  `);
 }
 
 function aiChatView() {
@@ -1293,7 +1371,7 @@ function handleAction(action, data = {}) {
     "ai-coach": () => navigate("partners"),
     "profile-menu": () => navigate("profile"),
     "view-profile": () => navigate("profile-detail"),
-    "view-profile-edit": () => setState({ route: "profile", authMessage: "Profile editing is available here." }),
+    "view-profile-edit": () => navigate("profile-edit"),
     "find-partners": () => navigate("partners"),
     "chat-ai": () => navigate("ai-chat"),
     help: () => setState({ route: "profile-detail", authMessage: "Help: intaliqsupport@gmail.com" }),
@@ -1610,7 +1688,14 @@ async function signOut() {
 }
 
 async function updateProfile(data) {
-  const nextProfile = { ...state.profile, ...data };
+  const nextProfile = {
+    ...state.profile,
+    ...data,
+    age: data.age || "",
+    showAge: data.showAge === "true" ? "true" : "false",
+    city: data.city || "Jeddah",
+    nationality: data.nationality || "",
+  };
   if (supabase && state.user) {
     const update = {
       data: {
@@ -1619,6 +1704,10 @@ async function updateProfile(data) {
         fitnessLevel: nextProfile.fitnessLevel,
         primaryGoal: nextProfile.primaryGoal,
         specialty: nextProfile.specialty,
+        age: nextProfile.age,
+        showAge: nextProfile.showAge,
+        city: nextProfile.city,
+        nationality: nextProfile.nationality,
         bio: nextProfile.bio,
       },
     };
@@ -1636,7 +1725,7 @@ async function updateProfile(data) {
 
   setState({
     profile: nextProfile,
-    route: "profile",
+    route: nextProfile.role === "coach" ? "profile" : "profile-detail",
     authError: "",
     authMessage: nextProfile.email !== state.profile.email ? "Profile saved. Check your inbox to confirm the new email address." : "Profile saved.",
   });
