@@ -677,9 +677,9 @@ function coachHomeView() {
 
       <section class="coach-stat-grid" aria-label="Coach stats">
         ${coachStat("Active Sessions", hasCoachData ? activeSessions : 6, "")}
-        ${coachStat("Total Members", hasCoachData ? Math.max(totalMembers, state.partners.length) : 47, "↑ 12%")}
         ${coachStat("Pending Requests", hasCoachData ? pendingCount : 8, "")}
         ${coachStat("Total Sessions", hasCoachData ? state.sessions.length : 13, "")}
+        ${coachStat("Total Members", hasCoachData ? Math.max(totalMembers, state.partners.length) : 47, "↑ 12%")}
       </section>
 
       <section class="coach-section">
