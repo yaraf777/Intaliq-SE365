@@ -62,16 +62,19 @@ function loadState(user = null) {
   if (!saved) {
     return { ...structuredClone(seedState), user: user ? publicUser(user) : null, profile: profile || structuredClone(seedState).profile };
   }
+  const parsed = JSON.parse(saved);
   return {
     ...structuredClone(seedState),
-    ...JSON.parse(saved),
+    ...parsed,
     user: user ? publicUser(user) : null,
-    profile: profile || { ...structuredClone(seedState).profile, ...JSON.parse(saved).profile },
+    profile: profile || { ...structuredClone(seedState).profile, ...parsed.profile },
+    authLoading: false,
   };
 }
 
 function saveState() {
-  localStorage.setItem(userStorageKey(state.user?.id), JSON.stringify(state));
+  const persistedState = { ...state, authLoading: false };
+  localStorage.setItem(userStorageKey(state.user?.id), JSON.stringify(persistedState));
 }
 
 function setState(patch) {
@@ -755,11 +758,11 @@ function bindEvents() {
 
 function handleAction(action, data = {}) {
   const actions = {
-    "auth-signin": () => setState({ authMode: "signin", authError: "", authMessage: "" }),
-    "auth-signup": () => setState({ authMode: "signup", authError: "", authMessage: "" }),
-    "role-member": () => setState({ profile: { ...state.profile, role: "member" }, authError: "", authMessage: "" }),
-    "role-coach": () => setState({ profile: { ...state.profile, role: "coach" }, authError: "", authMessage: "" }),
-    "back-to-login": () => setState({ route: "signin", authMode: "signin", authError: "", authMessage: "" }),
+    "auth-signin": () => setState({ authMode: "signin", authLoading: false, authError: "", authMessage: "" }),
+    "auth-signup": () => setState({ authMode: "signup", authLoading: false, authError: "", authMessage: "" }),
+    "role-member": () => setState({ profile: { ...state.profile, role: "member" }, authLoading: false, authError: "", authMessage: "" }),
+    "role-coach": () => setState({ profile: { ...state.profile, role: "coach" }, authLoading: false, authError: "", authMessage: "" }),
+    "back-to-login": () => setState({ route: "signin", authMode: "signin", authLoading: false, authError: "", authMessage: "" }),
     "resend-email-code": () => resendEmailCode(),
     "skip-onboarding": () => navigate("home"),
     back: () => navigate(state.user ? "home" : "signin"),
@@ -828,6 +831,8 @@ async function handleForm(type, data) {
 }
 
 async function handleAuth(data) {
+  if (state.authLoading) return;
+
   if (!supabase) {
     setState({ authError: "Add Supabase environment variables before signing in.", authMessage: "" });
     return;
