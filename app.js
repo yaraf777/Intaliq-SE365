@@ -83,7 +83,12 @@ function navigate(route) {
 }
 
 function formData(form) {
-  return Object.fromEntries(new FormData(form).entries());
+  const values = Object.fromEntries(new FormData(form).entries());
+  const interests = new FormData(form).getAll("interests");
+  if (interests.length) {
+    values.primaryGoal = interests.join(", ");
+  }
+  return values;
 }
 
 function validateEmail(value) {
@@ -129,6 +134,43 @@ function clamp(value) {
 
 function button(label, className, action, attrs = "") {
   return `<button class="btn ${className}" data-action="${action}" ${attrs}>${label}</button>`;
+}
+
+function selectedInterests(value = "") {
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function interestIcon(type) {
+  const icons = {
+    Running: `<svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="28" cy="7" r="4" fill="currentColor"/><path d="M24 14l-7 6 5 4 5-4 4 8 7 3 2-4-6-3-5-10zM21 27l-4 9-8 5 3 4 9-6 5-10zM29 31l7 5 2 8 5-1-3-10-9-7z" fill="currentColor"/></svg>`,
+    Hiking: `<svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="30" cy="7" r="4" fill="currentColor"/><path d="M23 14l-9 8 4 3 6-5 4 5-8 8-8 2 1 5 10-3 6-6 4 5-1 9h5l2-11-6-8 3-5 4 3 4-1-1-5-7-2-5-4z" fill="currentColor"/></svg>`,
+    Cycling: `<svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="31" cy="8" r="4" fill="currentColor"/><path d="M18 18h9l5 8h-7l-3 5-4-2 3-6h-8z" fill="currentColor"/><circle cx="13" cy="34" r="8" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="35" cy="34" r="8" fill="none" stroke="currentColor" stroke-width="3"/><path d="M13 34l8-11 6 11h8M25 23l6-6h6" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  };
+  return icons[type] || "";
+}
+
+function interestPicker(value = "") {
+  const selected = selectedInterests(value);
+  const options = ["Running", "Hiking", "Cycling"];
+  return `
+    <fieldset class="interest-field">
+      <legend>Interests</legend>
+      <div class="interest-options">
+        ${options.map((interest) => `
+          <label class="interest-option">
+            <input type="checkbox" name="interests" value="${interest}" ${selected.includes(interest) ? "checked" : ""} />
+            <span class="interest-card">
+              ${interestIcon(interest)}
+              <span>${interest}</span>
+            </span>
+          </label>
+        `).join("")}
+      </div>
+    </fieldset>
+  `;
 }
 
 function render() {
@@ -232,10 +274,7 @@ function signInView() {
               <input class="input auth-input" name="specialty" type="text" value="${state.profile.specialty}" placeholder="Strength, mobility, nutrition" required />
             </label>
           ` : `
-            <label class="field">
-              <span>Primary fitness goal</span>
-              <input class="input auth-input" name="primaryGoal" type="text" value="${state.profile.primaryGoal}" placeholder="Build strength, lose weight, run 5K" required />
-            </label>
+            ${interestPicker(state.profile.primaryGoal)}
           `}
           <label class="field">
             <span>Fitness level</span>
@@ -808,8 +847,8 @@ async function handleAuth(data) {
     return;
   }
 
-  if (isSignup && data.role !== "coach" && !data.primaryGoal.trim()) {
-    setState({ authLoading: false, authError: "Tell us your primary fitness goal.", authMessage: "" });
+  if (isSignup && data.role !== "coach" && !data.primaryGoal?.trim()) {
+    setState({ authLoading: false, authError: "Choose at least one fitness interest.", authMessage: "" });
     return;
   }
 

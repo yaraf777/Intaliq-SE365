@@ -185,6 +185,77 @@ button {
   color: rgba(255, 255, 255, 0.64);
 }
 
+.interest-field {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.interest-field legend {
+  margin-bottom: 10px;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 17px;
+  font-weight: 500;
+}
+
+.interest-options {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.interest-option {
+  min-width: 0;
+}
+
+.interest-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.interest-card {
+  min-height: 76px;
+  padding: 10px 6px 8px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 4px;
+  border: 2px solid transparent;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.22);
+  color: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 12px 20px rgba(0, 0, 0, 0.16);
+  transition: border-color 150ms ease, background 150ms ease, color 150ms ease;
+}
+
+.interest-card svg {
+  width: 31px;
+  height: 31px;
+  color: #c7ff4f;
+}
+
+.interest-card > span {
+  max-width: 100%;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
+.interest-option input:checked + .interest-card {
+  border-color: #c7ff4f;
+  background: rgba(199, 255, 79, 0.2);
+  color: #fff;
+}
+
+.interest-option input:focus-visible + .interest-card {
+  outline: 2px solid #c7ff4f;
+  outline-offset: 2px;
+}
+
 .auth-submit {
   min-height: 52px;
   margin-top: 4px;
