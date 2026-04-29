@@ -1546,6 +1546,7 @@ button {
 }
 
 .member-tabs-shell .tabs {
+  grid-template-columns: repeat(6, 1fr);
   background: rgba(91, 91, 91, 0.98);
   border-top: 0;
 }
@@ -1553,12 +1554,98 @@ button {
 .member-tabs-shell .tab {
   min-height: 60px;
   color: #fff;
-  font-size: 11px;
+  font-size: 10px;
 }
 
 .member-tabs-shell .tab strong {
   color: #c7ff4f;
-  font-size: 24px;
+  font-size: 22px;
+}
+
+.events-screen {
+  display: grid;
+  gap: 16px;
+}
+
+.events-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.event-category-card {
+  padding: 16px;
+  border-radius: 16px;
+  display: grid;
+  gap: 14px;
+  background: rgba(96, 96, 96, 0.95);
+  box-shadow: 0 16px 30px rgba(0, 0, 0, 0.24);
+}
+
+.event-category-head {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  gap: 12px;
+  align-items: center;
+}
+
+.event-category-head > span {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.28);
+  color: #c7ff4f;
+}
+
+.event-category-head svg {
+  width: 30px;
+  height: 30px;
+}
+
+.event-category-head h2 {
+  margin: 0;
+  color: #fff;
+  font-size: 20px;
+  line-height: 1.1;
+}
+
+.event-category-head p {
+  margin: 4px 0 0;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 13px;
+}
+
+.event-list {
+  display: grid;
+  gap: 10px;
+}
+
+.event-notification {
+  padding: 12px;
+  border-radius: 12px;
+  display: grid;
+  gap: 5px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.event-notification strong {
+  color: #fff;
+  font-size: 15px;
+}
+
+.event-notification p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.74);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.event-notification span,
+.event-empty {
+  color: rgba(199, 255, 79, 0.78);
+  font-size: 12px;
+  font-weight: 900;
 }
 
 .member-tabs-shell .tab.active {

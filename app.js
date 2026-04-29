@@ -190,7 +190,7 @@ function routeForProfile(profile = state.profile) {
 }
 
 function routeAllowedForRole(route, role = state.profile.role) {
-  const coachOnly = new Set(["activities", "stats", "history", "requests", "goal-form", "goal-detail", "activity-form"]);
+  const coachOnly = new Set(["events", "activities", "stats", "history", "requests", "goal-form", "goal-detail", "activity-form"]);
   const memberOnly = new Set([]);
   if (role === "coach") return !coachOnly.has(route);
   return !memberOnly.has(route);
@@ -324,7 +324,7 @@ function render() {
     return;
   }
 
-  const protectedRoutes = ["home", "activities", "stats", "history", "requests", "goals", "sessions", "partners", "find-partners", "friend-chat", "profile", "profile-detail", "profile-edit", "ai-chat", "goal-form", "goal-detail", "activity-form", "session-form", "session-detail"];
+  const protectedRoutes = ["home", "events", "activities", "stats", "history", "requests", "goals", "sessions", "partners", "find-partners", "friend-chat", "profile", "profile-detail", "profile-edit", "ai-chat", "goal-form", "goal-detail", "activity-form", "session-form", "session-detail"];
   if (protectedRoutes.includes(state.route) && !state.user) {
     state.route = "signin";
   }
@@ -338,6 +338,7 @@ function render() {
     verify: verifyView,
     onboarding: onboardingView,
     home: homeView,
+    events: eventsView,
     activities: activitiesView,
     stats: statsView,
     history: historyView,
@@ -576,6 +577,36 @@ function relevantAnnouncements() {
         message: messageParts.length ? messageParts.join(": ") : announcement,
       };
     }));
+}
+
+function eventNotificationsByType() {
+  const groups = {
+    Running: [],
+    Hiking: [],
+    Cycling: [],
+  };
+
+  state.sessions
+    .filter((session) => state.joinedSessions.includes(session.id))
+    .forEach((session) => {
+      const type = groups[session.type] ? session.type : "Running";
+      groups[type].push({
+        title: "Booked session",
+        message: `${session.title} is scheduled for ${session.date} at ${session.time}.`,
+        meta: session.level || "All levels",
+      });
+
+      (session.announcements || []).forEach((announcement) => {
+        const [title, ...messageParts] = announcement.split(": ");
+        groups[type].push({
+          title: messageParts.length ? title : "Session update",
+          message: messageParts.length ? messageParts.join(": ") : announcement,
+          meta: session.title,
+        });
+      });
+    });
+
+  return groups;
 }
 
 function memberStat(label, value, icon) {
@@ -948,6 +979,46 @@ function activitiesView() {
         ${state.activities.length
           ? state.activities.map((activity) => activityCard(activity)).join("")
           : `<div class="member-empty"><strong>No activities yet.</strong><span>Log a run, bike ride, or hike to see it here.</span></div>`}
+      </div>
+    </div>
+  `);
+}
+
+function eventsView() {
+  const groups = eventNotificationsByType();
+  const types = [
+    { key: "Running", label: "Running" },
+    { key: "Hiking", label: "Hiking" },
+    { key: "Cycling", label: "Biking" },
+  ];
+
+  return withTabs("events", `
+    <div class="events-screen">
+      <div class="member-page-topbar requests-head">
+        <h1>Events</h1>
+        <p>Notifications grouped by activity type</p>
+      </div>
+      <div class="events-grid">
+        ${types.map((type) => `
+          <section class="event-category-card">
+            <div class="event-category-head">
+              <span>${interestIcon(type.key)}</span>
+              <div>
+                <h2>${type.label}</h2>
+                <p>${groups[type.key].length} notification${groups[type.key].length === 1 ? "" : "s"}</p>
+              </div>
+            </div>
+            <div class="event-list">
+              ${groups[type.key].length ? groups[type.key].map((item) => `
+                <article class="event-notification">
+                  <strong>${item.title}</strong>
+                  <p>${item.message}</p>
+                  <span>${item.meta}</span>
+                </article>
+              `).join("") : `<div class="event-empty">No ${type.label.toLowerCase()} notifications yet.</div>`}
+            </div>
+          </section>
+        `).join("")}
       </div>
     </div>
   `);
@@ -1489,6 +1560,7 @@ function withTabs(active, body) {
           `
           : `
             ${tab("home", "⌂", "Home", active)}
+            ${tab("events", "!", "Events", active)}
             ${tab("activities", "↟", "Activities", active)}
             ${tab("sessions", "●●●", "Sessions", active)}
             ${tab("goals", "◎", "Goals", active)}
