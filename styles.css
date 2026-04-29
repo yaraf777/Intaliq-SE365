@@ -1567,6 +1567,34 @@ button {
   gap: 16px;
 }
 
+.event-filter-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  overflow: hidden;
+  border: 2px solid #050505;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.event-filter-tabs button {
+  min-height: 48px;
+  border: 0;
+  border-right: 2px solid #050505;
+  background: transparent;
+  color: #050505;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.event-filter-tabs button:last-child {
+  border-right: 0;
+}
+
+.event-filter-tabs button.active {
+  background: #7fc85a;
+  color: #050505;
+}
+
 .events-grid {
   display: grid;
   gap: 14px;

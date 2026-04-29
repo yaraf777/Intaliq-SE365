@@ -24,6 +24,7 @@ const seedState = {
   sessionMode: "join",
   statsPeriod: "Day",
   historyTab: "sessions",
+  eventFilter: "All",
   user: null,
   profile: {
     name: "",
@@ -986,11 +987,14 @@ function activitiesView() {
 
 function eventsView() {
   const groups = eventNotificationsByType();
+  const activeFilter = state.eventFilter || "All";
   const types = [
-    { key: "Running", label: "Running" },
-    { key: "Hiking", label: "Hiking" },
-    { key: "Cycling", label: "Biking" },
+    { key: "All", label: "All" },
+    { key: "Running", label: "Run" },
+    { key: "Hiking", label: "Hike" },
+    { key: "Cycling", label: "Bike" },
   ];
+  const selectedTypes = activeFilter === "All" ? types.slice(1) : types.filter((type) => type.key === activeFilter);
 
   return withTabs("events", `
     <div class="events-screen">
@@ -998,8 +1002,15 @@ function eventsView() {
         <h1>Events</h1>
         <p>Notifications grouped by activity type</p>
       </div>
-      <div class="events-grid">
+      <div class="event-filter-tabs" role="tablist" aria-label="Event categories">
         ${types.map((type) => `
+          <button class="${activeFilter === type.key ? "active" : ""}" data-action="set-event-filter" data-filter="${type.key}" type="button">
+            ${type.label}
+          </button>
+        `).join("")}
+      </div>
+      <div class="events-grid">
+        ${selectedTypes.map((type) => `
           <section class="event-category-card">
             <div class="event-category-head">
               <span>${interestIcon(type.key)}</span>
@@ -1774,6 +1785,7 @@ function handleAction(action, data = {}) {
     "mode-mine": () => setState({ sessionMode: "mine" }),
     "set-stats-period": () => setState({ statsPeriod: data.period || "Day" }),
     "set-history-tab": () => setState({ historyTab: data.tab || "sessions" }),
+    "set-event-filter": () => setState({ eventFilter: data.filter || "All" }),
     "session-detail": () => setState({ activeSessionId: data.id, route: "session-detail" }),
     "goal-detail": () => setState({ activeGoalId: data.id, route: "goal-detail" }),
     "log-activity": () => navigate("activity-form"),
