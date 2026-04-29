@@ -46,6 +46,7 @@ const seedState = {
   sessions: [],
   joinedSessions: [],
   partners: [],
+  partnerRequests: [],
   partnerDirectory: [],
   partnerSearch: "",
 };
@@ -191,7 +192,7 @@ function routeForProfile(profile = state.profile) {
 }
 
 function routeAllowedForRole(route, role = state.profile.role) {
-  const coachOnly = new Set(["events", "activities", "stats", "history", "requests", "goal-form", "goal-detail", "activity-form"]);
+  const coachOnly = new Set(["events", "activities", "stats", "history", "goal-form", "goal-detail", "activity-form"]);
   const memberOnly = new Set([]);
   if (role === "coach") return !coachOnly.has(route);
   return !memberOnly.has(route);
@@ -1153,7 +1154,7 @@ function sessionsView() {
 }
 
 function requestsView() {
-  const requests = state.sessions.filter((session) => (session.pendingApplicants || []).includes(state.profile.name || "New user"));
+  const requests = (state.partnerRequests || []).map(normalizePartnerRequest);
   return withTabs("profile", `
     <div class="history-screen">
       <button class="member-view-all back-button" data-action="view-profile">Back</button>
@@ -1163,11 +1164,47 @@ function requestsView() {
       </div>
       <div class="stack" style="margin-top: 12px;">
         ${requests.length
-          ? requests.map((session) => sessionCard(session)).join("")
-          : `<div class="member-empty"><strong>No requests yet.</strong><span>When you request to join approval-only sessions, they will appear here.</span></div>`}
+          ? requests.map((request) => partnerRequestCard(request)).join("")
+          : `<div class="member-empty"><strong>No requests yet.</strong><span>When another user or coach asks to partner with you, their request will appear here.</span></div>`}
       </div>
     </div>
   `);
+}
+
+function normalizePartnerRequest(request) {
+  if (typeof request === "string") {
+    return { id: request, name: request, role: "member", city: "", interests: "" };
+  }
+  return {
+    id: request.id || request.name,
+    name: request.name || "Intaliq member",
+    role: request.role || "member",
+    city: request.city || "",
+    interests: request.primaryGoal || request.specialty || request.interests || "",
+  };
+}
+
+function partnerRequestCard(request) {
+  const interests = selectedInterests(request.interests);
+  return `
+    <article class="partner-request-card">
+      <div class="friend-row-static">
+        <span class="friend-avatar">${initials(request.name)}</span>
+        <span>
+          <strong>${request.name}</strong>
+          <small>${request.role === "coach" ? "Coach" : "User"}${request.city ? ` · ${request.city}` : ""}</small>
+        </span>
+        <span class="pill">${request.role === "coach" ? "Coach" : "User"}</span>
+      </div>
+      <div class="partner-interest-line">
+        ${interests.length ? interests.map((item) => interestIcon(item)).join("") : "<span>No interests yet</span>"}
+      </div>
+      <div class="partner-request-actions">
+        <button class="btn btn-primary" data-action="accept-partner-request" data-id="${request.id}" data-name="${request.name}">Accept</button>
+        <button class="btn btn-ghost" data-action="reject-partner-request" data-id="${request.id}">Reject</button>
+      </div>
+    </article>
+  `;
 }
 
 function sessionFormView() {
@@ -1805,6 +1842,8 @@ function handleAction(action, data = {}) {
     "leave-session": () => leaveSession(data.id),
     "admit-user": () => admitUser(data.id, data.name),
     "connect-partner": () => connectPartner(data.name),
+    "accept-partner-request": () => acceptPartnerRequest(data.id, data.name),
+    "reject-partner-request": () => rejectPartnerRequest(data.id),
     "advance-goal": () => advanceGoal(data.id),
     signout: () => setState({ confirmSignOut: true }),
     "cancel-signout": () => setState({ confirmSignOut: false }),
@@ -2271,6 +2310,25 @@ async function syncPublicProfile(profile = state.profile) {
 
 function connectPartner(name) {
   setState({ partners: [...new Set([name, ...state.partners])] });
+}
+
+function removePartnerRequest(id) {
+  return (state.partnerRequests || []).filter((request) => normalizePartnerRequest(request).id !== id);
+}
+
+function acceptPartnerRequest(id, name) {
+  setState({
+    partnerRequests: removePartnerRequest(id),
+    partners: [...new Set([name, ...state.partners])],
+    authMessage: `${name} is now your friend.`,
+  });
+}
+
+function rejectPartnerRequest(id) {
+  setState({
+    partnerRequests: removePartnerRequest(id),
+    authMessage: "Partner request rejected.",
+  });
 }
 
 function advanceGoal(id) {
