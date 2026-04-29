@@ -1005,8 +1005,8 @@ function eventsView() {
       </div>
       <div class="event-filter-tabs" role="tablist" aria-label="Event categories">
         ${types.map((type) => `
-          <button class="${activeFilter === type.key ? "active" : ""}" data-action="set-event-filter" data-filter="${type.key}" type="button">
-            ${type.label}
+          <button class="${activeFilter === type.key ? "active" : ""}" data-action="set-event-filter" data-filter="${type.key}" type="button" aria-label="${type.label}">
+            ${type.key === "All" ? "All" : interestIcon(type.key)}
           </button>
         `).join("")}
       </div>
