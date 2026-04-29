@@ -1533,6 +1533,46 @@ button {
   color: #fff;
 }
 
+.confirm-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.48);
+}
+
+.confirm-dialog {
+  width: min(100%, 320px);
+  padding: 20px;
+  border-radius: 18px;
+  display: grid;
+  gap: 14px;
+  background: rgba(247, 249, 244, 0.98);
+  color: #202020;
+  box-shadow: 0 24px 50px rgba(0, 0, 0, 0.36);
+}
+
+.confirm-dialog h2 {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.1;
+}
+
+.confirm-dialog p {
+  margin: 0;
+  color: rgba(32, 32, 32, 0.68);
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.confirm-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
 .coach-tabs-shell {
   color: #fff;
   background:

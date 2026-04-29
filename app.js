@@ -14,6 +14,7 @@ const seedState = {
   authMessage: "",
   authError: "",
   authLoading: false,
+  confirmSignOut: false,
   pendingEmail: "",
   pendingVerificationRole: "member",
   pendingVerificationName: "",
@@ -302,8 +303,24 @@ function render() {
     "session-detail": sessionDetailView,
   };
 
-  app.innerHTML = (views[state.route] || signInView)();
+  app.innerHTML = (views[state.route] || signInView)() + signOutConfirmModal();
   bindEvents();
+}
+
+function signOutConfirmModal() {
+  if (!state.confirmSignOut) return "";
+  return `
+    <div class="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="logout-title">
+      <div class="confirm-dialog">
+        <h2 id="logout-title">Log out?</h2>
+        <p>Are you sure you want to log out?</p>
+        <div class="confirm-actions">
+          <button class="btn btn-ghost" data-action="cancel-signout">Cancel</button>
+          <button class="btn btn-primary" data-action="confirm-signout">Log out</button>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 function verifyView() {
@@ -1619,7 +1636,9 @@ function handleAction(action, data = {}) {
     "admit-user": () => admitUser(data.id, data.name),
     "connect-partner": () => connectPartner(data.name),
     "advance-goal": () => advanceGoal(data.id),
-    signout: () => signOut(),
+    signout: () => setState({ confirmSignOut: true }),
+    "cancel-signout": () => setState({ confirmSignOut: false }),
+    "confirm-signout": () => signOut(),
   };
 
   actions[action]?.();
@@ -1916,7 +1935,7 @@ async function verifyEmailCode(data) {
 
 async function signOut() {
   if (supabase) await supabase.auth.signOut();
-  setState({ user: null, route: "signin", authMode: "signin", authError: "", authMessage: "Signed out." });
+  setState({ user: null, route: "signin", authMode: "signin", confirmSignOut: false, authError: "", authMessage: "Signed out." });
 }
 
 async function updateProfile(data) {
