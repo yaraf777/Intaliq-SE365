@@ -1503,6 +1503,7 @@ function handleAction(action, data = {}) {
     "skip-onboarding": () => navigate("home"),
     back: () => navigate(state.user ? "home" : "signin"),
     goals: () => navigate("goals"),
+    stats: () => navigate("stats"),
     sessions: () => navigate("sessions"),
     "new-goal": () => navigate("goal-form"),
     "new-session": () => state.profile.role === "coach" ? navigate("session-form") : navigate("sessions"),
