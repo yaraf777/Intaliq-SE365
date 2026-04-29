@@ -15,6 +15,7 @@ const seedState = {
   authError: "",
   authLoading: false,
   confirmSignOut: false,
+  futureFeatureMessage: "",
   pendingEmail: "",
   pendingVerificationRole: "member",
   pendingVerificationName: "",
@@ -362,7 +363,7 @@ function render() {
     "session-detail": sessionDetailView,
   };
 
-  app.innerHTML = (views[state.route] || signInView)() + signOutConfirmModal();
+  app.innerHTML = (views[state.route] || signInView)() + signOutConfirmModal() + futureFeatureModal();
   bindEvents();
 }
 
@@ -376,6 +377,21 @@ function signOutConfirmModal() {
         <div class="confirm-actions">
           <button class="btn btn-ghost" data-action="cancel-signout">Cancel</button>
           <button class="btn btn-primary" data-action="confirm-signout">Log out</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function futureFeatureModal() {
+  if (!state.futureFeatureMessage) return "";
+  return `
+    <div class="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="future-feature-title">
+      <div class="confirm-dialog future-feature-dialog">
+        <h2 id="future-feature-title">Coming soon</h2>
+        <p>${state.futureFeatureMessage}</p>
+        <div class="confirm-actions single">
+          <button class="btn btn-primary" data-action="close-future-feature">OK</button>
         </div>
       </div>
     </div>
@@ -1318,6 +1334,7 @@ function profileView() {
         ${moreMenuRow("◉", "View Profile", "view-profile")}
         ${moreMenuRow("◇", "Find Partners", "find-partners")}
         ${moreMenuRow("✦", "Chat with AI", "chat-ai")}
+        ${moreMenuRow("◎", "Language", "future-language", "English")}
         ${moreMenuRow("?", "Help", "help", "intaliqsupport@gmail.com", false)}
         ${moreMenuRow("↩", "Log out", "signout")}
       </div>
@@ -1849,6 +1866,8 @@ function handleAction(action, data = {}) {
     "find-partners": () => openFindPartners(),
     "open-friend-chat": () => setState({ activeFriendName: data.name, route: "friend-chat" }),
     "chat-ai": () => navigate("ai-chat"),
+    "future-language": () => setState({ futureFeatureMessage: "This feature will be implemented in future versions." }),
+    "close-future-feature": () => setState({ futureFeatureMessage: "" }),
     help: () => setState({ route: "profile-detail", authMessage: "Help: intaliqsupport@gmail.com" }),
     "review-requests": () => navigate("goals"),
     "make-announcement": () => navigate("partners"),

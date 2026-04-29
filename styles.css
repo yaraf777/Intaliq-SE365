@@ -1746,6 +1746,10 @@ button {
   gap: 10px;
 }
 
+.confirm-actions.single {
+  grid-template-columns: 1fr;
+}
+
 .coach-tabs-shell {
   color: #fff;
   background:
