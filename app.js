@@ -173,7 +173,7 @@ function profileFromPublicProfile(row, user = state.user) {
   const baseProfile = profileFromUser(user) || structuredClone(seedState).profile;
   return {
     ...baseProfile,
-    name: row.name || baseProfile.name,
+    name: row.name || row.full_name || row.username || baseProfile.name,
     email: row.email || baseProfile.email,
     role: accountRole(row),
     primaryGoal: row.primary_goal || row.primaryGoal || baseProfile.primaryGoal,
@@ -202,7 +202,7 @@ async function profileWithDatabaseRole(user) {
 
   const { data } = await supabase
     .from("profiles")
-    .select("id, name, email, role, city, primary_goal, specialty, nationality")
+    .select("*")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -2098,7 +2098,7 @@ async function loadPartnerDirectory() {
     .from("profiles")
     .select("*")
     .neq("id", state.user.id)
-    .order("name", { ascending: true });
+    .order("full_name", { ascending: true });
 
   if (error) {
     setState({ partnerDirectory: [] });
@@ -2110,17 +2110,16 @@ async function loadPartnerDirectory() {
 
 async function syncPublicProfile(profile = state.profile) {
   if (!supabase || !state.user) return;
-  await supabase.from("profiles").upsert({
+  const payload = {
     id: state.user.id,
-    name: profile.name,
+    full_name: profile.name,
     email: profile.email,
     role: profile.role,
-    city: profile.city,
-    primary_goal: profile.primaryGoal,
     specialty: profile.specialty,
-    nationality: profile.nationality,
     updated_at: new Date().toISOString(),
-  });
+  };
+
+  await supabase.from("profiles").upsert(payload);
 }
 
 function connectPartner(name) {
