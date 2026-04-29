@@ -269,7 +269,7 @@ function render() {
     return;
   }
 
-  const protectedRoutes = ["home", "activities", "goals", "sessions", "partners", "profile", "profile-detail", "profile-edit", "ai-chat", "goal-form", "goal-detail", "activity-form", "session-form", "session-detail"];
+  const protectedRoutes = ["home", "activities", "goals", "sessions", "partners", "friend-chat", "profile", "profile-detail", "profile-edit", "ai-chat", "goal-form", "goal-detail", "activity-form", "session-form", "session-detail"];
   if (protectedRoutes.includes(state.route) && !state.user) {
     state.route = "signin";
   }
@@ -283,6 +283,7 @@ function render() {
     goals: goalsView,
     sessions: sessionsView,
     partners: partnersView,
+    "friend-chat": friendChatView,
     profile: profileView,
     "profile-detail": profileDetailView,
     "profile-edit": profileEditView,
@@ -917,7 +918,7 @@ function profileView() {
         ${message}
         <div class="more-menu-list">
           ${moreMenuRow("◉", "View Profile", "view-profile")}
-          ${moreMenuRow("◇", "Find Partners", "find-partners")}
+          ${moreMenuRow("◇", "Friends", "find-partners")}
           ${moreMenuRow("✦", "Chat with AI", "chat-ai")}
           ${moreMenuRow("?", "Help", "help")}
         </div>
@@ -1139,36 +1140,47 @@ function partnersView() {
     `);
   }
 
-  const suggested = state.profile.role === "coach"
-    ? [
-        { name: "Maha", role: "User", detail: "Intermediate · Strength goals" },
-        { name: "Omar", role: "Coach", detail: "Mobility coach · Open to co-hosting" },
-        { name: "Noura", role: "User", detail: "Beginner · Needs accountability" },
-      ]
-    : [
-        { name: "Lina", role: "User", detail: "Beginner · Morning workouts" },
-        { name: "Fahad", role: "Coach", detail: "Strength coach · Small groups" },
-        { name: "Sara", role: "User", detail: "Intermediate · Running partner" },
-      ];
-
   return withTabs("partners", `
     <div class="topbar">
-      <h1>Partners</h1>
+      <h1>Friends</h1>
     </div>
     <div class="stack">
-      ${suggested.map((partner) => `
-        <article class="session-card">
-          <div class="session-head">
-            <div>
-              <h3>${partner.name}</h3>
-              <div class="subtle">${partner.detail}</div>
-            </div>
-            <span class="pill">${partner.role}</span>
-          </div>
-          <button class="btn btn-primary" data-action="connect-partner" data-name="${partner.name}">Connect</button>
-        </article>
-      `).join("")}
-      ${state.partners.length ? `<div class="card stack"><h3>Connected</h3>${state.partners.map((name) => `<div class="list-row"><span>${name}</span><span class="pill gray">connected</span></div>`).join("")}</div>` : ""}
+      ${state.partners.length ? state.partners.map((name) => `
+        <button class="friend-row" data-action="open-friend-chat" data-name="${name}">
+          <span class="friend-avatar">${initials(name)}</span>
+          <span>
+            <strong>${name}</strong>
+            <small>Tap to start chatting</small>
+          </span>
+          <b>›</b>
+        </button>
+      `).join("") : `
+        <div class="member-empty friend-empty">
+          <strong>No friends yet.</strong>
+          <span>People you connect with will appear here. Tap a friend to start a chat.</span>
+        </div>
+      `}
+    </div>
+  `);
+}
+
+function friendChatView() {
+  const name = state.activeFriendName || "Friend";
+  return withTabs("partners", `
+    <div class="ai-chat-screen">
+      <button class="member-view-all back-button" data-action="find-partners">Back</button>
+      <div>
+        <h1>${name}</h1>
+        <p>Chat with your Intaliq friend.</p>
+      </div>
+      <div class="ai-chat-card">
+        <div class="ai-bubble">Start the conversation with ${name}.</div>
+        <label class="field">
+          <span>Message</span>
+          <textarea class="textarea" placeholder="Write a message..."></textarea>
+        </label>
+        <button class="btn btn-primary activity-submit" type="button">Send</button>
+      </div>
     </div>
   `);
 }
@@ -1420,6 +1432,7 @@ function handleAction(action, data = {}) {
     "view-profile": () => navigate("profile-detail"),
     "view-profile-edit": () => navigate("profile-edit"),
     "find-partners": () => navigate("partners"),
+    "open-friend-chat": () => setState({ activeFriendName: data.name, route: "friend-chat" }),
     "chat-ai": () => navigate("ai-chat"),
     help: () => setState({ route: "profile-detail", authMessage: "Help: intaliqsupport@gmail.com" }),
     "review-requests": () => {
