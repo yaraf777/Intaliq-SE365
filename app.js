@@ -243,7 +243,7 @@ function render() {
     return;
   }
 
-  const protectedRoutes = ["home", "goals", "sessions", "partners", "profile", "goal-form", "activity-form", "session-form", "session-detail"];
+  const protectedRoutes = ["home", "activities", "goals", "sessions", "partners", "profile", "goal-form", "activity-form", "session-form", "session-detail"];
   if (protectedRoutes.includes(state.route) && !state.user) {
     state.route = "signin";
   }
@@ -253,6 +253,7 @@ function render() {
     verify: verifyView,
     onboarding: onboardingView,
     home: homeView,
+    activities: activitiesView,
     goals: goalsView,
     sessions: sessionsView,
     partners: partnersView,
@@ -391,8 +392,10 @@ function memberHomeView() {
   const totalDistance = state.activities.reduce((total, activity) => total + Number(activity.distance || 0), 0);
   const calories = state.activities.reduce((total, activity) => total + activityCalories(activity), 0).toLocaleString();
   const activeDays = `${Math.min(7, new Set(state.activities.map((activity) => activity.time?.slice(0, 10))).size)}/7`;
+  const message = state.authMessage ? `<div class="member-toast">${state.authMessage}</div>` : "";
   return withTabs("home", `
     <div class="member-dashboard">
+      ${message}
       <header class="member-dashboard-head">
         <h1>Welcome back, ${displayName}!</h1>
         <p>Take your first step - Intaliq</p>
@@ -474,6 +477,37 @@ function activityCalories(activity) {
   const minutes = Number(activity.duration) || 0;
   const factors = { Running: 11, Cycling: 8, Hiking: 7 };
   return Math.round(minutes * (factors[activity.type] || 8));
+}
+
+function activityDateLabel(value) {
+  if (!value) return "No time set";
+  return new Intl.DateTimeFormat([], {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
+function activityLabel(type) {
+  return type === "Cycling" ? "Bike" : type === "Running" ? "Run" : "Hike";
+}
+
+function activityCard(activity) {
+  return `
+    <article class="activity-history-card">
+      <div class="session-mark">${interestIcon(activity.type)}</div>
+      <div>
+        <h3>${activityLabel(activity.type)}</h3>
+        <p>${activityDateLabel(activity.time)}</p>
+        <div class="activity-history-meta">
+          <span>${formatDistance(activity.distance)} km</span>
+          <span>${activity.duration} min</span>
+          <span>${activityCalories(activity)} cal</span>
+        </div>
+      </div>
+    </article>
+  `;
 }
 
 function coachHomeView() {
@@ -609,8 +643,28 @@ function goalFormView() {
   `);
 }
 
+function activitiesView() {
+  const totalDistance = state.activities.reduce((total, activity) => total + Number(activity.distance || 0), 0);
+  return withTabs("activities", `
+    <div class="activity-history-screen">
+      <div class="topbar member-page-topbar">
+        <div>
+          <h1>Activities</h1>
+          <p>${state.activities.length} logged · ${formatDistance(totalDistance)} km total</p>
+        </div>
+        ${button("+ Log", "btn-primary", "log-activity")}
+      </div>
+      <div class="stack">
+        ${state.activities.length
+          ? state.activities.map((activity) => activityCard(activity)).join("")
+          : `<div class="member-empty"><strong>No activities yet.</strong><span>Log a run, bike ride, or hike to see it here.</span></div>`}
+      </div>
+    </div>
+  `);
+}
+
 function activityFormView() {
-  return withTabs("goals", `
+  return withTabs("activities", `
     <div class="activity-log-screen">
       <button class="member-view-all back-button" data-action="back">Back</button>
       <div>
@@ -859,9 +913,9 @@ function withTabs(active, body) {
           `
           : `
             ${tab("home", "⌂", "Home", active)}
-            ${tab("goals", "↟", "Activities", active)}
+            ${tab("activities", "↟", "Activities", active)}
             ${tab("sessions", "●●●", "Sessions", active)}
-            ${tab("partners", "◎", "Goals", active)}
+            ${tab("goals", "◎", "Goals", active)}
             ${tab("profile", "•••", "More", active)}
           `}
       </nav>
@@ -1079,7 +1133,7 @@ async function handleForm(type, data) {
 
   if (type === "activity") {
     const activity = makeActivity(data);
-    setState({ activities: [activity, ...state.activities], route: "home" });
+    setState({ activities: [activity, ...state.activities], route: "home", authMessage: "Activity logged successfully." });
   }
 
   if (type === "session") {

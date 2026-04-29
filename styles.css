@@ -754,6 +754,77 @@ button {
   color: #fff;
 }
 
+.member-toast {
+  padding: 12px 14px;
+  border: 1px solid rgba(199, 255, 79, 0.5);
+  border-radius: 12px;
+  background: rgba(199, 255, 79, 0.18);
+  color: #eaffce;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.activity-history-screen {
+  display: grid;
+  gap: 18px;
+}
+
+.member-page-topbar {
+  align-items: start;
+}
+
+.member-page-topbar h1 {
+  margin: 0;
+  color: #fff;
+  font-size: 28px;
+  line-height: 1.1;
+}
+
+.member-page-topbar p {
+  margin: 6px 0 0;
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 14px;
+}
+
+.activity-history-card {
+  border: 0;
+  border-radius: 13px;
+  padding: 13px;
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  gap: 11px;
+  background: rgba(96, 96, 96, 0.96);
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.24);
+}
+
+.activity-history-card h3 {
+  margin: 0;
+  color: #fff;
+  font-size: 17px;
+}
+
+.activity-history-card p {
+  margin: 4px 0 0;
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 13px;
+}
+
+.activity-history-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.activity-history-meta span {
+  padding: 5px 8px;
+  border-radius: 99px;
+  background: rgba(199, 255, 79, 0.18);
+  color: #c7ff4f;
+  font-size: 12px;
+  font-weight: 900;
+}
+
 .activity-log-screen {
   display: grid;
   gap: 18px;
