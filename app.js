@@ -996,19 +996,19 @@ function profileDetailView() {
         ${profileSketchRow("✦", "Requests", "sessions")}
         ${profileSketchRow("↗", "My stats", "activities")}
         ${profileSketchRow("◷", "History", "activities")}
-        ${profileSketchRow("?", "Help", "help")}
+        ${profileSketchRow("?", "Help", "help", "intaliqsupport@gmail.com", false)}
       </div>
     </div>
   `);
 }
 
-function profileSketchRow(icon, label, action, meta = "") {
+function profileSketchRow(icon, label, action, meta = "", showArrow = true) {
   return `
     <button class="profile-sketch-row" data-action="${action}">
       <span>${icon}</span>
       <strong>${label}</strong>
       ${meta ? `<em>${meta}</em>` : ""}
-      <b>›</b>
+      ${showArrow ? "<b>›</b>" : "<b></b>"}
     </button>
   `;
 }
