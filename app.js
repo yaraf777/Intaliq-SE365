@@ -243,7 +243,7 @@ function render() {
     return;
   }
 
-  const protectedRoutes = ["home", "activities", "goals", "sessions", "partners", "profile", "goal-form", "goal-detail", "activity-form", "session-form", "session-detail"];
+  const protectedRoutes = ["home", "activities", "goals", "sessions", "partners", "profile", "profile-detail", "ai-chat", "goal-form", "goal-detail", "activity-form", "session-form", "session-detail"];
   if (protectedRoutes.includes(state.route) && !state.user) {
     state.route = "signin";
   }
@@ -258,6 +258,8 @@ function render() {
     sessions: sessionsView,
     partners: partnersView,
     profile: profileView,
+    "profile-detail": profileDetailView,
+    "ai-chat": aiChatView,
     "goal-form": goalFormView,
     "goal-detail": goalDetailView,
     "activity-form": activityFormView,
@@ -853,6 +855,25 @@ function sessionDetailView() {
 }
 
 function profileView() {
+  if (state.profile.role !== "coach") {
+    const message = state.authMessage ? `<div class="member-toast">${state.authMessage}</div>` : "";
+    return withTabs("profile", `
+      <div class="more-menu-screen">
+        <div>
+          <h1>More</h1>
+          <p>Manage your account and support options.</p>
+        </div>
+        ${message}
+        <div class="more-menu-list">
+          ${moreMenuRow("◉", "View Profile", "view-profile")}
+          ${moreMenuRow("◇", "Find Partners", "find-partners")}
+          ${moreMenuRow("✦", "Chat with AI", "chat-ai")}
+          ${moreMenuRow("?", "Help", "help")}
+        </div>
+      </div>
+    `);
+  }
+
   const message = state.authMessage ? `<div class="notice">${state.authMessage}</div>` : "";
   const error = state.authError ? `<div class="notice danger-box">${state.authError}</div>` : "";
   const isCoach = state.profile.role === "coach";
@@ -881,6 +902,84 @@ function profileView() {
       <label class="field"><span>Bio</span><textarea class="textarea" name="bio">${state.profile.bio}</textarea></label>
       <button class="btn btn-primary" type="submit">Update profile</button>
     </form>
+  `);
+}
+
+function moreMenuRow(icon, label, action) {
+  return `
+    <button class="more-menu-row" data-action="${action}">
+      <span class="more-row-icon">${icon}</span>
+      <span>${label}</span>
+      <strong>›</strong>
+    </button>
+  `;
+}
+
+function profileDetailView() {
+  const name = state.profile.name || "New user";
+  const message = state.authMessage ? `<div class="member-toast">${state.authMessage}</div>` : "";
+  const handle = `@${(state.profile.email || "user@intaliq.app").split("@")[0]}`;
+  const totalDistance = state.activities.reduce((total, activity) => total + Number(activity.distance || 0), 0);
+  const stats = [
+    { value: state.activities.length || 0, label: "Activities" },
+    { value: `${formatDistance(totalDistance)} km`, label: "Distance" },
+    { value: `${averageProgress()}%`, label: "Goals" },
+  ];
+  return withTabs("profile", `
+    <div class="profile-sketch-screen">
+      <button class="member-view-all back-button" data-action="profile-menu">Back</button>
+      ${message}
+      <div class="profile-sketch-head">
+        <div class="profile-user-icon">
+          <span></span>
+          <strong></strong>
+        </div>
+        <h1>${name}</h1>
+        <p>${handle} <span>|</span> Jeddah</p>
+      </div>
+      <div class="profile-stat-strip">
+        ${stats.map((item) => `<div><strong>${item.value}</strong><span>${item.label}</span></div>`).join("")}
+      </div>
+      <div class="profile-sketch-list">
+        ${profileSketchRow("◉", "Profile", "view-profile-edit")}
+        ${profileSketchRow("◇", "Friends", "find-partners")}
+        ${profileSketchRow("✦", "Requests", "sessions")}
+        ${profileSketchRow("↗", "My stats", "activities")}
+        ${profileSketchRow("◷", "History", "activities")}
+        ${profileSketchRow("?", "Help", "help", "intaliqsupport@gmail.com")}
+      </div>
+    </div>
+  `);
+}
+
+function profileSketchRow(icon, label, action, meta = "") {
+  return `
+    <button class="profile-sketch-row" data-action="${action}">
+      <span>${icon}</span>
+      <strong>${label}</strong>
+      ${meta ? `<em>${meta}</em>` : ""}
+      <b>›</b>
+    </button>
+  `;
+}
+
+function aiChatView() {
+  return withTabs("profile", `
+    <div class="ai-chat-screen">
+      <button class="member-view-all back-button" data-action="profile-menu">Back</button>
+      <div>
+        <h1>AI Coach</h1>
+        <p>Ask for workout ideas, goal pacing, or session suggestions.</p>
+      </div>
+      <div class="ai-chat-card">
+        <div class="ai-bubble">Hi, I can help you plan your next Intaliq activity. What are you training for?</div>
+        <label class="field">
+          <span>Message</span>
+          <textarea class="textarea" placeholder="Ask Intaliq AI..."></textarea>
+        </label>
+        <button class="btn btn-primary activity-submit" type="button">Send</button>
+      </div>
+    </div>
   `);
 }
 
@@ -1192,6 +1291,12 @@ function handleAction(action, data = {}) {
     "set-goal": () => navigate("goal-form"),
     "find-session": () => navigate("sessions"),
     "ai-coach": () => navigate("partners"),
+    "profile-menu": () => navigate("profile"),
+    "view-profile": () => navigate("profile-detail"),
+    "view-profile-edit": () => setState({ route: "profile", authMessage: "Profile editing is available here." }),
+    "find-partners": () => navigate("partners"),
+    "chat-ai": () => navigate("ai-chat"),
+    help: () => setState({ route: "profile-detail", authMessage: "Help: intaliqsupport@gmail.com" }),
     "review-requests": () => {
       const target = state.sessions.find((session) => session.pendingApplicants?.length) || state.sessions[0];
       setState(target ? { activeSessionId: target.id, route: "session-detail" } : { route: "sessions" });

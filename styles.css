@@ -861,6 +861,196 @@ button {
   text-align: center;
 }
 
+.more-menu-screen,
+.profile-sketch-screen,
+.ai-chat-screen {
+  display: grid;
+  gap: 18px;
+}
+
+.more-menu-screen h1,
+.profile-sketch-screen h1,
+.ai-chat-screen h1 {
+  margin: 0;
+  color: #fff;
+  font-size: 28px;
+  line-height: 1.1;
+}
+
+.more-menu-screen p,
+.ai-chat-screen p {
+  margin: 7px 0 0;
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 15px;
+}
+
+.more-menu-list,
+.profile-sketch-list {
+  display: grid;
+  gap: 12px;
+}
+
+.more-menu-row,
+.profile-sketch-row {
+  width: 100%;
+  min-height: 58px;
+  border: 2px solid rgba(0, 0, 0, 0.75);
+  border-radius: 10px;
+  padding: 10px 14px;
+  display: grid;
+  grid-template-columns: 34px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  background: rgba(128, 128, 128, 0.82);
+  color: #050505;
+  text-align: left;
+}
+
+.more-row-icon,
+.profile-sketch-row > span {
+  color: #050505;
+  font-size: 24px;
+  line-height: 1;
+  font-weight: 900;
+}
+
+.more-menu-row > span:nth-child(2),
+.profile-sketch-row strong {
+  color: #050505;
+  font-size: 21px;
+  font-weight: 900;
+}
+
+.more-menu-row strong,
+.profile-sketch-row b {
+  color: #050505;
+  font-size: 34px;
+  line-height: 1;
+}
+
+.profile-sketch-head {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.profile-user-icon {
+  width: 116px;
+  height: 116px;
+  border: 4px solid #050505;
+  border-radius: 50%;
+  position: relative;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.profile-user-icon span {
+  position: absolute;
+  width: 42px;
+  height: 42px;
+  left: 50%;
+  top: 23px;
+  border-radius: 50%;
+  transform: translateX(-50%);
+  background: #050505;
+}
+
+.profile-user-icon strong {
+  position: absolute;
+  width: 94px;
+  height: 46px;
+  left: 50%;
+  bottom: -2px;
+  border-radius: 50% 50% 0 0;
+  transform: translateX(-50%);
+  background: #050505;
+}
+
+.profile-sketch-head h1 {
+  color: #050505;
+  font-size: 28px;
+}
+
+.profile-sketch-head p {
+  margin: 0;
+  color: rgba(0, 0, 0, 0.45);
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.profile-sketch-head p span {
+  color: #050505;
+  margin: 0 8px;
+}
+
+.profile-stat-strip {
+  border: 3px solid #050505;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.profile-stat-strip div {
+  min-height: 70px;
+  padding: 10px 6px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  border-left: 3px solid #050505;
+}
+
+.profile-stat-strip div:first-child {
+  border-left: 0;
+}
+
+.profile-stat-strip strong {
+  color: #050505;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.profile-stat-strip span {
+  color: #050505;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.profile-sketch-row {
+  grid-template-columns: 34px 1fr minmax(0, auto) auto;
+}
+
+.profile-sketch-row em {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 900;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.ai-chat-card {
+  padding: 16px;
+  border-radius: 18px;
+  display: grid;
+  gap: 14px;
+  background: rgba(86, 86, 86, 0.86);
+  box-shadow: 0 18px 34px rgba(0, 0, 0, 0.22);
+}
+
+.ai-bubble {
+  padding: 13px 14px;
+  border-radius: 14px 14px 14px 4px;
+  background: rgba(199, 255, 79, 0.18);
+  color: #eaffce;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.ai-chat-card .field span {
+  color: rgba(255, 255, 255, 0.78);
+}
+
 .activity-log-screen h1 {
   margin: 0;
   color: #fff;
