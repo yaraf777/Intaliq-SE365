@@ -93,6 +93,10 @@ function formData(form) {
   if (interests.length) {
     values.primaryGoal = interests.join(", ");
   }
+  const specialty = new FormData(form).get("coachSpecialty");
+  if (specialty) {
+    values.specialty = specialty;
+  }
   return values;
 }
 
@@ -153,6 +157,9 @@ function interestIcon(type) {
     Running: `<svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="28" cy="7" r="4" fill="currentColor"/><path d="M24 14l-7 6 5 4 5-4 4 8 7 3 2-4-6-3-5-10zM21 27l-4 9-8 5 3 4 9-6 5-10zM29 31l7 5 2 8 5-1-3-10-9-7z" fill="currentColor"/></svg>`,
     Hiking: `<svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="30" cy="7" r="4" fill="currentColor"/><path d="M23 14l-9 8 4 3 6-5 4 5-8 8-8 2 1 5 10-3 6-6 4 5-1 9h5l2-11-6-8 3-5 4 3 4-1-1-5-7-2-5-4z" fill="currentColor"/></svg>`,
     Cycling: `<svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="31" cy="8" r="4" fill="currentColor"/><path d="M18 18h9l5 8h-7l-3 5-4-2 3-6h-8z" fill="currentColor"/><circle cx="13" cy="34" r="8" fill="none" stroke="currentColor" stroke-width="3"/><circle cx="35" cy="34" r="8" fill="none" stroke="currentColor" stroke-width="3"/><path d="M13 34l8-11 6 11h8M25 23l6-6h6" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+    Strength: `<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M7 20h6v8H7zM35 20h6v8h-6zM14 16h5v16h-5zM29 16h5v16h-5zM19 22h10v4H19z" fill="currentColor"/></svg>`,
+    Mobility: `<svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="25" cy="8" r="4" fill="currentColor"/><path d="M23 14l-8 8 4 4 5-5 4 5-8 10 4 4 10-12-3-8 5 3 5-1-1-5-7 1-6-4zM13 37h27v5H13z" fill="currentColor"/></svg>`,
+    Nutrition: `<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 8c-8 2-12 8-12 15 0 8 6 15 15 17 7-4 10-10 9-17-1-8-5-13-12-15z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M26 7c2-3 5-4 9-3-1 4-4 6-8 6" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg>`,
   };
   return icons[type] || "";
 }
@@ -170,6 +177,26 @@ function interestPicker(value = "") {
             <span class="interest-card">
               ${interestIcon(interest)}
               <span>${interest}</span>
+            </span>
+          </label>
+        `).join("")}
+      </div>
+    </fieldset>
+  `;
+}
+
+function specialtyPicker(value = "") {
+  const options = ["Strength", "Mobility", "Nutrition"];
+  return `
+    <fieldset class="interest-field">
+      <legend>Coaching specialty</legend>
+      <div class="interest-options">
+        ${options.map((specialty) => `
+          <label class="interest-option">
+            <input type="radio" name="coachSpecialty" value="${specialty}" ${value === specialty ? "checked" : ""} required />
+            <span class="interest-card">
+              ${interestIcon(specialty)}
+              <span>${specialty}</span>
             </span>
           </label>
         `).join("")}
@@ -274,10 +301,7 @@ function signInView() {
             <input class="input auth-input" name="name" type="text" value="${state.profile.name}" required />
           </label>
           ${selectedRole === "coach" ? `
-            <label class="field">
-              <span>Coaching specialty</span>
-              <input class="input auth-input" name="specialty" type="text" value="${state.profile.specialty}" placeholder="Strength, mobility, nutrition" required />
-            </label>
+            ${specialtyPicker(state.profile.specialty)}
           ` : `
             ${interestPicker(state.profile.primaryGoal)}
           `}
