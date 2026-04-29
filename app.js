@@ -371,53 +371,123 @@ function memberHomeView() {
 }
 
 function coachHomeView() {
-  const firstName = state.profile.name.split(" ")[0] || "coach";
+  const displayName = state.profile.name || "Coach";
   const upcoming = state.sessions[0];
   const pendingCount = state.sessions.reduce((total, session) => total + (session.pendingApplicants?.length || 0), 0);
+  const totalMembers = state.sessions.reduce((total, session) => total + session.members.length, 0);
+  const activeSessions = state.sessions.filter((session) => session.date !== "Completed").length;
   return withTabs("home", `
-    <div class="stack">
-      <div class="home-header">
-        <div class="profile-row">
-          <div class="avatar">${initials(state.profile.name || "Coach")}</div>
-          <div>
-            <h1 class="page-title">Hi, ${firstName}</h1>
-            <div class="subtle">${state.profile.specialty || "Coach profile"}</div>
-          </div>
+    <div class="coach-dashboard">
+      <header class="coach-dashboard-head">
+        <div>
+          <h1>Coach Dashboard</h1>
+          <p>Welcome back, ${displayName}!</p>
         </div>
-        <button class="icon-btn" data-action="signout" title="Log out">Log out</button>
-      </div>
-      <div class="metric-row">
-        <div class="metric"><b>${state.sessions.length}</b><span>Sessions</span></div>
-        <div class="metric"><b>${pendingCount}</b><span>Requests</span></div>
-        <div class="metric"><b>${state.partners.length}</b><span>Partners</span></div>
-      </div>
-      <section class="card stack">
-        <div class="goal-head">
-          <h2 class="page-title">My sessions</h2>
-          ${button("Create", "btn-link", "new-session")}
-        </div>
-        ${upcoming ? sessionCard(upcoming) : `<div class="empty">Create sessions, review join requests, and announce updates.</div>`}
+        <button class="coach-logout" data-action="signout">Logout</button>
+      </header>
+
+      <section class="coach-stat-grid" aria-label="Coach stats">
+        ${coachStat("Active Sessions", activeSessions || state.sessions.length, "")}
+        ${coachStat("Total Members", Math.max(totalMembers, state.partners.length), "↑ 12%")}
+        ${coachStat("Pending Requests", pendingCount, "")}
+        ${coachStat("Total Sessions", state.sessions.length, "")}
       </section>
-      <section class="card stack">
-        <div class="goal-head">
-          <h2 class="page-title">Find partners</h2>
-          ${button("Browse", "btn-link", "partners")}
+
+      <section class="coach-section">
+        <h2>Quick Actions</h2>
+        <div class="coach-actions">
+          <button class="coach-action primary" data-action="new-session">Create New Session</button>
+          <button class="coach-action primary" data-action="review-requests">Review Requests</button>
+          <button class="coach-action secondary" data-action="make-announcement">Make Announcement</button>
+          <button class="coach-action secondary" data-action="sessions">My Sessions</button>
         </div>
-        <div class="empty">Connect with users and other coaches for programs, classes, or accountability.</div>
+      </section>
+
+      <section class="coach-section">
+        <div class="coach-section-head">
+          <h2>Upcoming Sessions</h2>
+          <button class="coach-view-all" data-action="sessions">View All <span>→</span></button>
+        </div>
+        ${upcoming ? coachUpcomingCard(upcoming) : `
+          <div class="coach-empty">
+            <strong>No upcoming sessions yet.</strong>
+            <span>Create a new session to start admitting users and sharing announcements.</span>
+          </div>
+        `}
       </section>
     </div>
   `);
 }
 
+function coachStat(label, value, trend) {
+  return `
+    <article class="coach-stat">
+      <span>${label}</span>
+      <div>
+        <strong>${value}</strong>
+        ${trend ? `<em>${trend}</em>` : ""}
+      </div>
+    </article>
+  `;
+}
+
+function coachUpcomingCard(session) {
+  const remaining = Math.max(0, session.capacity - session.members.length);
+  return `
+    <article class="coach-session-card" data-action="session-detail" data-id="${session.id}">
+      <div class="session-mark">${interestIcon(session.type === "Cardio" ? "Running" : "Cycling")}</div>
+      <div class="coach-session-main">
+        <div class="coach-session-title">
+          <h3>${session.title}</h3>
+          <span>${session.level || "All levels"}</span>
+        </div>
+        <p>Coach ${state.profile.name || "Intaliq"}</p>
+        <p>${session.date} at ${session.time}</p>
+        <p>${session.notes || "Focused workout session."}</p>
+        <p>${session.members.length}/${session.capacity} enrolled - ${remaining} spot${remaining === 1 ? "" : "s"} left</p>
+      </div>
+    </article>
+  `;
+}
+
 function goalsView() {
   const isCoach = state.profile.role === "coach";
+  if (isCoach) {
+    const sessionsWithRequests = state.sessions.filter((session) => session.pendingApplicants?.length);
+    return withTabs("goals", `
+      <div class="topbar coach-page-topbar">
+        <h1>Admissions</h1>
+        ${button("My Sessions", "btn-primary", "sessions")}
+      </div>
+      <div class="stack">
+        ${sessionsWithRequests.length ? sessionsWithRequests.map((session) => `
+          <article class="coach-request-card">
+            <div class="session-head">
+              <div>
+                <h3>${session.title}</h3>
+                <div class="subtle">${session.level || "All levels"} · ${session.date} at ${session.time}</div>
+              </div>
+              <span class="pill warn">${session.pendingApplicants.length} pending</span>
+            </div>
+            ${session.pendingApplicants.map((name) => `
+              <div class="coach-request-row">
+                <span>${name}</span>
+                <button class="coach-mini-action" data-action="admit-user" data-id="${session.id}" data-name="${name}">Admit</button>
+              </div>
+            `).join("")}
+          </article>
+        `).join("") : `<div class="coach-empty"><strong>No pending admissions.</strong><span>Requests for approval-required sessions will appear here.</span></div>`}
+      </div>
+    `);
+  }
+
   return withTabs("goals", `
     <div class="topbar">
-      <h1>${isCoach ? "Plans" : "Goals"}</h1>
-      ${button(isCoach ? "+ Plan" : "+ Goal", "btn-primary", "new-goal")}
+      <h1>Goals</h1>
+      ${button("+ Goal", "btn-primary", "new-goal")}
     </div>
     <div class="stack">
-      ${state.goals.length ? state.goals.map((goal) => goalCard(goal)).join("") : `<div class="empty">${isCoach ? "No training plans yet." : "No goals yet."}</div>`}
+      ${state.goals.length ? state.goals.map((goal) => goalCard(goal)).join("") : `<div class="empty">No goals yet.</div>`}
     </div>
   `);
 }
@@ -560,6 +630,36 @@ function profileView() {
 }
 
 function partnersView() {
+  if (state.profile.role === "coach") {
+    return withTabs("partners", `
+      <div class="topbar coach-page-topbar">
+        <h1>Announce</h1>
+        ${button("+ Session", "btn-primary", "new-session")}
+      </div>
+      <div class="stack">
+        ${state.sessions.length ? state.sessions.map((session) => `
+          <form class="coach-announcement-card" data-form="announcement">
+            <div>
+              <h3>${session.title}</h3>
+              <p>${session.date} at ${session.time} · ${session.members.length}/${session.capacity} enrolled</p>
+            </div>
+            <label class="field">
+              <span>Message</span>
+              <textarea class="textarea" name="announcement" placeholder="Share an update with this session"></textarea>
+            </label>
+            <input type="hidden" name="sessionId" value="${session.id}" />
+            <button class="coach-action primary" type="submit">Post Announcement</button>
+            ${(session.announcements || []).length ? `
+              <div class="coach-posted-list">
+                ${(session.announcements || []).map((item) => `<span>${item}</span>`).join("")}
+              </div>
+            ` : ""}
+          </form>
+        `).join("") : `<div class="coach-empty"><strong>No sessions yet.</strong><span>Create a session before posting announcements.</span></div>`}
+      </div>
+    `);
+  }
+
   const suggested = state.profile.role === "coach"
     ? [
         { name: "Maha", role: "User", detail: "Intermediate · Strength goals" },
@@ -612,14 +712,24 @@ function page(title, subtitle, body) {
 function withTabs(active, body) {
   const isCoach = state.profile.role === "coach";
   return `
-    <div class="view-with-tabs">
+    <div class="view-with-tabs ${isCoach ? "coach-tabs-shell" : ""}">
       <div class="tab-content">${body}</div>
       <nav class="tabs" aria-label="Primary">
-        ${tab("home", "H", "Home", active)}
-        ${tab("goals", "G", isCoach ? "Plans" : "Goals", active)}
-        ${tab("sessions", "S", "Sessions", active)}
-        ${tab("partners", "P", "Partners", active)}
-        ${tab("profile", "Me", "Profile", active)}
+        ${isCoach
+          ? `
+            ${tab("home", "⌂", "Home", active)}
+            ${tab("sessions", "●●●", "Sessions", active)}
+            ${tab("goals", "↟", "Admissions", active)}
+            ${tab("partners", "◔", "Announce", active)}
+            ${tab("profile", "•••", "More", active)}
+          `
+          : `
+            ${tab("home", "H", "Home", active)}
+            ${tab("goals", "G", "Goals", active)}
+            ${tab("sessions", "S", "Sessions", active)}
+            ${tab("partners", "P", "Partners", active)}
+            ${tab("profile", "Me", "Profile", active)}
+          `}
       </nav>
     </div>
   `;
@@ -773,6 +883,14 @@ function handleAction(action, data = {}) {
     "mode-join": () => setState({ sessionMode: "join" }),
     "mode-mine": () => setState({ sessionMode: "mine" }),
     "session-detail": () => setState({ activeSessionId: data.id, route: "session-detail" }),
+    "review-requests": () => {
+      const target = state.sessions.find((session) => session.pendingApplicants?.length) || state.sessions[0];
+      setState(target ? { activeSessionId: target.id, route: "session-detail" } : { route: "sessions" });
+    },
+    "make-announcement": () => {
+      const target = state.sessions[0];
+      setState(target ? { activeSessionId: target.id, route: "session-detail" } : { route: "session-form" });
+    },
     "join-session": () => joinSession(data.id),
     "leave-session": () => leaveSession(data.id),
     "admit-user": () => admitUser(data.id, data.name),
@@ -1007,11 +1125,19 @@ async function verifyEmailCode(data) {
 
   setState({ authLoading: true, authError: "", authMessage: "" });
 
-  const response = await supabase.auth.verifyOtp({
+  let response = await supabase.auth.verifyOtp({
     email: state.pendingEmail,
     token,
     type: "email",
   });
+
+  if (response.error) {
+    response = await supabase.auth.verifyOtp({
+      email: state.pendingEmail,
+      token,
+      type: "signup",
+    });
+  }
 
   if (response.error) {
     setState({ authLoading: false, authError: response.error.message, authMessage: "" });

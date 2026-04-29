@@ -528,6 +528,327 @@ button {
   background: var(--accent-soft);
 }
 
+.coach-tabs-shell {
+  color: #fff;
+  background:
+    radial-gradient(circle at 58% 10%, rgba(255, 255, 255, 0.34), transparent 24%),
+    linear-gradient(180deg, #787a77 0%, #4f504e 46%, #050505 100%);
+}
+
+.coach-tabs-shell .tab-content {
+  padding: 22px 20px 20px;
+}
+
+.coach-dashboard {
+  display: grid;
+  gap: 26px;
+  padding-bottom: 8px;
+}
+
+.coach-dashboard-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: start;
+}
+
+.coach-dashboard-head h1 {
+  margin: 0;
+  color: #fff;
+  font-size: 25px;
+  line-height: 1.1;
+}
+
+.coach-dashboard-head p {
+  margin: 12px 0 0;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 17px;
+  line-height: 1.2;
+}
+
+.coach-logout,
+.coach-view-all {
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font-weight: 900;
+}
+
+.coach-logout {
+  padding: 2px 0;
+  font-size: 15px;
+}
+
+.coach-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px;
+}
+
+.coach-stat {
+  min-height: 96px;
+  padding: 17px 14px 14px;
+  border-radius: 14px;
+  background: rgba(76, 76, 76, 0.78);
+  box-shadow: 0 18px 26px rgba(0, 0, 0, 0.2);
+  display: grid;
+  align-content: space-between;
+  gap: 14px;
+}
+
+.coach-stat span {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.coach-stat div {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.coach-stat strong {
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 42px;
+  line-height: 0.9;
+  font-weight: 400;
+}
+
+.coach-stat em {
+  color: #c7ff4f;
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.coach-section {
+  display: grid;
+  gap: 16px;
+}
+
+.coach-section h2 {
+  margin: 0;
+  color: #fff;
+  font-size: 25px;
+  line-height: 1.1;
+}
+
+.coach-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 12px;
+}
+
+.coach-view-all {
+  color: #c7ff4f;
+  padding: 0;
+  font-size: 13px;
+}
+
+.coach-view-all span {
+  font-size: 18px;
+}
+
+.coach-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.coach-action {
+  min-height: 46px;
+  border: 0;
+  border-radius: 8px;
+  padding: 8px;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.coach-action.primary {
+  background: #c7ff4f;
+  color: #5b5b5b;
+}
+
+.coach-action.secondary {
+  background: rgba(255, 255, 255, 0.35);
+  color: #c7ff4f;
+}
+
+.coach-session-card {
+  border: 0;
+  border-radius: 13px;
+  padding: 12px;
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  gap: 10px;
+  background: rgba(96, 96, 96, 0.95);
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.22);
+}
+
+.session-mark {
+  width: 31px;
+  height: 31px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #1c1c1c;
+  color: #c7ff4f;
+}
+
+.session-mark svg {
+  width: 23px;
+  height: 23px;
+}
+
+.coach-session-main {
+  min-width: 0;
+}
+
+.coach-session-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.coach-session-title h3 {
+  margin: 0;
+  color: #050505;
+  font-size: 16px;
+  line-height: 1.1;
+}
+
+.coach-session-title span {
+  color: #ff9d20;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.coach-session-main p {
+  margin: 5px 0 0;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.coach-empty {
+  padding: 18px;
+  border-radius: 13px;
+  display: grid;
+  gap: 8px;
+  background: rgba(96, 96, 96, 0.95);
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.coach-empty strong {
+  color: #fff;
+}
+
+.coach-tabs-shell .tabs {
+  background: rgba(91, 91, 91, 0.98);
+  border-top: 0;
+}
+
+.coach-tabs-shell .tab {
+  min-height: 60px;
+  color: #fff;
+  font-size: 11px;
+}
+
+.coach-tabs-shell .tab strong {
+  color: #c7ff4f;
+  font-size: 24px;
+}
+
+.coach-tabs-shell .tab.active {
+  background: transparent;
+  color: #fff;
+}
+
+.coach-tabs-shell .topbar h1,
+.coach-tabs-shell .page-title,
+.coach-tabs-shell .session-head h3 {
+  color: #fff;
+}
+
+.coach-tabs-shell .subtle {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.coach-tabs-shell .btn-ghost {
+  border: 0;
+  background: rgba(255, 255, 255, 0.35);
+  color: #fff;
+}
+
+.coach-tabs-shell .session-card {
+  border: 0;
+  background: rgba(96, 96, 96, 0.95);
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.22);
+}
+
+.coach-request-card,
+.coach-announcement-card {
+  border: 0;
+  border-radius: 13px;
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+  background: rgba(96, 96, 96, 0.95);
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.22);
+}
+
+.coach-request-row {
+  padding-top: 11px;
+  border-top: 1px solid rgba(255, 255, 255, 0.16);
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  color: #fff;
+  font-weight: 800;
+}
+
+.coach-mini-action {
+  min-height: 34px;
+  border: 0;
+  border-radius: 8px;
+  padding: 6px 12px;
+  background: #c7ff4f;
+  color: #173006;
+  font-weight: 900;
+}
+
+.coach-announcement-card h3 {
+  margin: 0;
+  color: #fff;
+}
+
+.coach-announcement-card p {
+  margin: 5px 0 0;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 13px;
+}
+
+.coach-announcement-card .field span {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.coach-posted-list {
+  display: grid;
+  gap: 8px;
+}
+
+.coach-posted-list span {
+  padding: 9px 10px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.22);
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 13px;
+}
+
 .profile-row {
   display: flex;
   align-items: center;
