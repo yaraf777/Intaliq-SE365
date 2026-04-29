@@ -1000,7 +1000,6 @@ function profileDetailView() {
         ${profileSketchRow("✦", "Requests", "sessions")}
         ${profileSketchRow("↗", "My stats", "activities")}
         ${profileSketchRow("◷", "History", "activities")}
-        ${profileSketchRow("?", "Help", "help", "intaliqsupport@gmail.com", false)}
       </div>
     </div>
   `);
