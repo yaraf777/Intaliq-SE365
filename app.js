@@ -827,24 +827,30 @@ function sessionsView() {
     `);
   }
 
-  const joined = state.sessions.filter((session) => state.joinedSessions.includes(session.id));
-  const open = state.sessions.filter((session) => !state.joinedSessions.includes(session.id));
+  const requests = state.sessions.filter((session) => (session.pendingApplicants || []).includes(state.profile.name || "New user"));
   return withTabs("sessions", `
-    <div class="topbar">
-      <h1>Sessions</h1>
-      ${button("+ Session", "btn-primary", "new-session")}
-    </div>
-    <div class="segmented">
-      <button class="${state.sessionMode === "join" ? "active" : ""}" data-action="mode-join">Join</button>
-      <button class="${state.sessionMode === "mine" ? "active" : ""}" data-action="mode-mine">Mine</button>
+    <div class="member-page-topbar requests-head">
+      <h1>Requests</h1>
+      <p>${requests.length} request${requests.length === 1 ? "" : "s"} received</p>
     </div>
     <div class="stack" style="margin-top: 12px;">
-      ${(state.sessionMode === "join" ? open : joined).map((session) => sessionCard(session)).join("") || `<div class="empty">${state.sessionMode === "join" ? "No open sessions yet. Create the first one." : "You have not joined any sessions yet."}</div>`}
+      ${requests.length
+        ? requests.map((session) => sessionCard(session)).join("")
+        : `<div class="member-empty"><strong>No requests yet.</strong><span>When you request to join approval-only sessions, they will appear here.</span></div>`}
     </div>
   `);
 }
 
 function sessionFormView() {
+  if (state.profile.role !== "coach") {
+    return withTabs("sessions", `
+      <div class="member-empty">
+        <strong>Only coaches can create sessions.</strong>
+        <span>Users can request to join coach-created sessions.</span>
+      </div>
+    `);
+  }
+
   return page("Create session", state.profile.role === "coach" ? "Schedule a coaching session for users to join." : "Open a focused workout around one goal or topic.", `
     <form class="stack" data-form="session">
       ${sessionFields()}
@@ -1445,7 +1451,7 @@ function handleAction(action, data = {}) {
     goals: () => navigate("goals"),
     sessions: () => navigate("sessions"),
     "new-goal": () => navigate("goal-form"),
-    "new-session": () => navigate("session-form"),
+    "new-session": () => state.profile.role === "coach" ? navigate("session-form") : navigate("sessions"),
     "mode-join": () => setState({ sessionMode: "join" }),
     "mode-mine": () => setState({ sessionMode: "mine" }),
     "session-detail": () => setState({ activeSessionId: data.id, route: "session-detail" }),
