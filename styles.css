@@ -528,6 +528,253 @@ button {
   background: var(--accent-soft);
 }
 
+.member-tabs-shell {
+  color: #fff;
+  background:
+    radial-gradient(circle at 52% 10%, rgba(255, 255, 255, 0.32), transparent 24%),
+    linear-gradient(180deg, #7b7d7a 0%, #535452 42%, #050505 100%);
+}
+
+.member-tabs-shell .tab-content {
+  padding: 22px 18px 20px;
+}
+
+.member-dashboard {
+  display: grid;
+  gap: 25px;
+  padding-bottom: 8px;
+}
+
+.member-dashboard-head h1 {
+  margin: 0;
+  color: #fff;
+  font-size: 21px;
+  line-height: 1.16;
+  font-weight: 500;
+}
+
+.member-dashboard-head p {
+  margin: 5px 0 0;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 15px;
+  line-height: 1.2;
+}
+
+.member-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.member-stat {
+  min-height: 104px;
+  padding: 16px 14px 13px;
+  border-radius: 12px;
+  background: rgba(86, 86, 86, 0.86);
+  box-shadow: 0 18px 26px rgba(0, 0, 0, 0.2);
+  display: grid;
+  align-content: space-between;
+  gap: 13px;
+}
+
+.member-stat > span {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.member-stat div {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 8px;
+}
+
+.member-stat strong {
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 28px;
+  line-height: 1;
+  font-weight: 900;
+}
+
+.member-stat-icon {
+  color: #c7ff4f;
+  font-size: 24px;
+  line-height: 1;
+  font-weight: 900;
+}
+
+.flame-icon {
+  color: #ff9d20;
+}
+
+.member-section {
+  display: grid;
+  gap: 14px;
+}
+
+.member-section h2 {
+  margin: 0;
+  color: #fff;
+  font-size: 21px;
+  line-height: 1.1;
+  font-weight: 500;
+}
+
+.member-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 16px;
+}
+
+.member-action {
+  min-height: 46px;
+  border: 0;
+  border-radius: 11px;
+  padding: 8px 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.member-action svg {
+  width: 24px;
+  height: 24px;
+}
+
+.member-action.primary {
+  background: #c7ff4f;
+  color: rgba(98, 98, 98, 0.7);
+}
+
+.member-action.ghost {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.36);
+}
+
+.member-action.ghost > span:first-child,
+.target-icon,
+.spark-icon,
+.mini-group {
+  color: #c7ff4f;
+  font-size: 19px;
+  line-height: 1;
+}
+
+.member-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 12px;
+}
+
+.member-view-all {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #c7ff4f;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.member-view-all span {
+  font-size: 17px;
+}
+
+.member-goal-card {
+  border: 0;
+  border-radius: 13px;
+  padding: 13px 10px 17px;
+  display: grid;
+  gap: 17px;
+  background: rgba(96, 96, 96, 0.96);
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.24);
+}
+
+.member-goal-head {
+  display: grid;
+  grid-template-columns: 36px 1fr auto;
+  gap: 10px;
+  align-items: start;
+}
+
+.member-goal-head h3 {
+  margin: 0;
+  color: #050505;
+  font-size: 16px;
+  line-height: 1.1;
+}
+
+.member-goal-head p,
+.member-goal-card > p {
+  margin: 5px 0 0;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 13px;
+}
+
+.member-goal-head > span {
+  min-width: 70px;
+  min-height: 26px;
+  padding: 5px 10px;
+  border-radius: 9px;
+  text-align: center;
+  background: #fff200;
+  color: #050505;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.member-progress {
+  height: 7px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.82);
+  overflow: hidden;
+}
+
+.member-progress > span {
+  display: block;
+  height: 100%;
+  width: var(--value);
+  background: #c7ff4f;
+}
+
+.member-empty {
+  padding: 18px;
+  border-radius: 13px;
+  display: grid;
+  gap: 8px;
+  background: rgba(96, 96, 96, 0.96);
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.member-empty strong {
+  color: #fff;
+}
+
+.member-tabs-shell .tabs {
+  background: rgba(91, 91, 91, 0.98);
+  border-top: 0;
+}
+
+.member-tabs-shell .tab {
+  min-height: 60px;
+  color: #fff;
+  font-size: 11px;
+}
+
+.member-tabs-shell .tab strong {
+  color: #c7ff4f;
+  font-size: 24px;
+}
+
+.member-tabs-shell .tab.active {
+  background: transparent;
+  color: #fff;
+}
+
 .coach-tabs-shell {
   color: #fff;
   background:

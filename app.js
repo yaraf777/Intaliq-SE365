@@ -331,43 +331,83 @@ function homeView() {
 }
 
 function memberHomeView() {
-  const nextSession = state.sessions.find((session) => state.joinedSessions.includes(session.id));
   const activeGoal = state.goals[0];
-  const firstName = state.profile.name.split(" ")[0] || "there";
-  const profileLine = [state.profile.primaryGoal, state.profile.fitnessLevel].filter(Boolean).join(" · ") || "Complete your fitness profile";
+  const displayName = state.profile.name || "Intaliq athlete";
+  const thisWeekKm = state.goals.length ? `${(state.goals.length * 4.2 + state.joinedSessions.length * 2.1).toFixed(1)} km` : "0 km";
+  const calories = (state.goals.length * 120 + state.joinedSessions.length * 350).toLocaleString();
+  const activeDays = `${Math.min(7, state.goals.length + state.joinedSessions.length)}/7`;
   return withTabs("home", `
-    <div class="stack">
-      <div class="home-header">
-        <div class="profile-row">
-          <div class="avatar">${initials(state.profile.name || "User")}</div>
-          <div>
-            <h1 class="page-title">Hi, ${firstName}</h1>
-            <div class="subtle">${profileLine}</div>
-          </div>
-        </div>
-        <button class="icon-btn" data-action="signout" title="Log out">Log out</button>
-      </div>
-      <div class="metric-row">
-        <div class="metric"><b>${state.goals.length}</b><span>Goals</span></div>
-        <div class="metric"><b>${state.joinedSessions.length}</b><span>Sessions</span></div>
-        <div class="metric"><b>${averageProgress()}%</b><span>Progress</span></div>
-      </div>
-      <section class="card stack">
-        <div class="goal-head">
-          <h2 class="page-title">Current goal</h2>
-          ${button("Add", "btn-link", "new-goal")}
-        </div>
-        ${activeGoal ? goalCard(activeGoal, true) : `<div class="empty">Add a goal to start tracking checkpoints.</div>`}
+    <div class="member-dashboard">
+      <header class="member-dashboard-head">
+        <h1>Welcome back, ${displayName}!</h1>
+        <p>Take your first step - Intaliq</p>
+      </header>
+
+      <section class="member-stat-grid" aria-label="User stats">
+        ${memberStat("This Week", thisWeekKm, "")}
+        ${memberStat("Calories", calories, "flame")}
+        ${memberStat("Active Days", activeDays, "calendar")}
+        ${memberStat("Sessions", state.joinedSessions.length, "group")}
       </section>
-      <section class="card stack">
-        <div class="goal-head">
-          <h2 class="page-title">Next session</h2>
-          ${button("Browse", "btn-link", "sessions")}
+
+      <section class="member-section">
+        <h2>Quick Actions</h2>
+        <div class="member-actions">
+          <button class="member-action primary" data-action="log-activity">${interestIcon("Running")}<span>Log Activity</span></button>
+          <button class="member-action primary" data-action="set-goal"><span class="target-icon">◎</span><span>Set Goal</span></button>
+          <button class="member-action ghost" data-action="find-session"><span class="mini-group">●●●</span><span>Find Session</span></button>
+          <button class="member-action ghost" data-action="ai-coach"><span class="spark-icon">✦</span><span>AI Coach</span></button>
         </div>
-        ${nextSession ? sessionCard(nextSession) : `<div class="empty">Join a workout session or create your own training group.</div>`}
+      </section>
+
+      <section class="member-section">
+        <div class="member-section-head">
+          <h2>Active Goals</h2>
+          <button class="member-view-all" data-action="goals">View all <span>→</span></button>
+        </div>
+        ${activeGoal ? memberGoalCard(activeGoal) : `
+          <div class="member-empty">
+            <strong>No active goals yet.</strong>
+            <span>Set your first goal to start tracking progress.</span>
+          </div>
+        `}
       </section>
     </div>
   `);
+}
+
+function memberStat(label, value, icon) {
+  const icons = {
+    flame: `<span class="member-stat-icon flame-icon">◖</span>`,
+    calendar: `<span class="member-stat-icon calendar-icon">▣</span>`,
+    group: `<span class="member-stat-icon group-icon">●●●</span>`,
+  };
+  return `
+    <article class="member-stat">
+      <span>${label}</span>
+      <div>
+        <strong>${value}</strong>
+        ${icons[icon] || ""}
+      </div>
+    </article>
+  `;
+}
+
+function memberGoalCard(goal) {
+  return `
+    <article class="member-goal-card">
+      <div class="member-goal-head">
+        <div class="session-mark">${interestIcon(goal.category === "Cardio" ? "Running" : "Cycling")}</div>
+        <div>
+          <h3>${goal.title}</h3>
+          <p>Due: ${goal.due}</p>
+        </div>
+        <span>${goal.progress}%</span>
+      </div>
+      <p>Progress</p>
+      <div class="member-progress" style="--value: ${goal.progress}%"><span></span></div>
+    </article>
+  `;
 }
 
 function coachHomeView() {
@@ -712,7 +752,7 @@ function page(title, subtitle, body) {
 function withTabs(active, body) {
   const isCoach = state.profile.role === "coach";
   return `
-    <div class="view-with-tabs ${isCoach ? "coach-tabs-shell" : ""}">
+    <div class="view-with-tabs ${isCoach ? "coach-tabs-shell" : "member-tabs-shell"}">
       <div class="tab-content">${body}</div>
       <nav class="tabs" aria-label="Primary">
         ${isCoach
@@ -724,11 +764,11 @@ function withTabs(active, body) {
             ${tab("profile", "•••", "More", active)}
           `
           : `
-            ${tab("home", "H", "Home", active)}
-            ${tab("goals", "G", "Goals", active)}
-            ${tab("sessions", "S", "Sessions", active)}
-            ${tab("partners", "P", "Partners", active)}
-            ${tab("profile", "Me", "Profile", active)}
+            ${tab("home", "⌂", "Home", active)}
+            ${tab("goals", "↟", "Activities", active)}
+            ${tab("sessions", "●●●", "Sessions", active)}
+            ${tab("partners", "◎", "Goals", active)}
+            ${tab("profile", "•••", "More", active)}
           `}
       </nav>
     </div>
@@ -883,6 +923,10 @@ function handleAction(action, data = {}) {
     "mode-join": () => setState({ sessionMode: "join" }),
     "mode-mine": () => setState({ sessionMode: "mine" }),
     "session-detail": () => setState({ activeSessionId: data.id, route: "session-detail" }),
+    "log-activity": () => navigate("goal-form"),
+    "set-goal": () => navigate("goal-form"),
+    "find-session": () => navigate("sessions"),
+    "ai-coach": () => navigate("partners"),
     "review-requests": () => {
       const target = state.sessions.find((session) => session.pendingApplicants?.length) || state.sessions[0];
       setState(target ? { activeSessionId: target.id, route: "session-detail" } : { route: "sessions" });
