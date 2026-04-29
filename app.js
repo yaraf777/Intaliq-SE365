@@ -186,17 +186,21 @@ function interestPicker(value = "") {
 }
 
 function specialtyPicker(value = "") {
-  const options = ["Strength", "Mobility", "Nutrition"];
+  const options = [
+    { value: "Running", label: "Running", icon: "Running" },
+    { value: "Hiking", label: "Hiking", icon: "Hiking" },
+    { value: "Cycling", label: "Biking", icon: "Cycling" },
+  ];
   return `
     <fieldset class="interest-field">
       <legend>Coaching specialty</legend>
       <div class="interest-options">
         ${options.map((specialty) => `
           <label class="interest-option">
-            <input type="radio" name="coachSpecialty" value="${specialty}" ${value === specialty ? "checked" : ""} required />
+            <input type="radio" name="coachSpecialty" value="${specialty.value}" ${value === specialty.value ? "checked" : ""} required />
             <span class="interest-card">
-              ${interestIcon(specialty)}
-              <span>${specialty}</span>
+              ${interestIcon(specialty.icon)}
+              <span>${specialty.label}</span>
             </span>
           </label>
         `).join("")}
