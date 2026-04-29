@@ -1647,6 +1647,8 @@ button {
   place-items: center;
   background: rgba(0, 0, 0, 0.28);
   color: #c7ff4f;
+  font-size: 14px;
+  font-weight: 900;
 }
 
 .event-category-head svg {

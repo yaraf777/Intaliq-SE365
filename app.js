@@ -45,6 +45,7 @@ const seedState = {
   activities: [],
   sessions: [],
   joinedSessions: [],
+  generalAnnouncements: [],
   partners: [],
   partnerRequests: [],
   partnerDirectory: [],
@@ -583,10 +584,20 @@ function relevantAnnouncements() {
 
 function eventNotificationsByType() {
   const groups = {
+    All: [],
     Running: [],
     Hiking: [],
     Cycling: [],
   };
+  groups.All = (state.generalAnnouncements || []).map((announcement) => {
+    const [title, ...messageParts] = announcement.split(": ");
+    return {
+      title: messageParts.length ? title : "General announcement",
+      message: messageParts.length ? messageParts.join(": ") : announcement,
+      meta: "General",
+    };
+  });
+
   const relevantSessions = state.profile.role === "coach"
     ? state.sessions
     : state.sessions.filter((session) => state.joinedSessions.includes(session.id));
@@ -997,7 +1008,7 @@ function eventsView() {
     { key: "Hiking", label: "Hike" },
     { key: "Cycling", label: "Bike" },
   ];
-  const selectedTypes = activeFilter === "All" ? types.slice(1) : types.filter((type) => type.key === activeFilter);
+  const selectedTypes = activeFilter === "All" ? types : types.filter((type) => type.key === activeFilter);
 
   return withTabs("events", `
     <div class="events-screen">
@@ -1016,7 +1027,7 @@ function eventsView() {
         ${selectedTypes.map((type) => `
           <section class="event-category-card">
             <div class="event-category-head">
-              <span>${interestIcon(type.key)}</span>
+              <span>${type.key === "All" ? "All" : interestIcon(type.key)}</span>
               <div>
                 <h2>${type.label}</h2>
                 <p>${groups[type.key].length} notification${groups[type.key].length === 1 ? "" : "s"}</p>
@@ -1029,7 +1040,7 @@ function eventsView() {
                   <p>${item.message}</p>
                   <span>${item.meta}</span>
                 </article>
-              `).join("") : `<div class="event-empty">No ${type.label.toLowerCase()} notifications yet.</div>`}
+              `).join("") : `<div class="event-empty">${type.key === "All" ? "No general announcements yet." : `No ${type.label.toLowerCase()} notifications yet.`}</div>`}
             </div>
           </section>
         `).join("")}
@@ -1468,7 +1479,6 @@ function aiChatView() {
 
 function partnersView() {
   if (state.profile.role === "coach") {
-    const hasSessions = state.sessions.length > 0;
     const sessionOptions = state.sessions.map((session) => `
       <option value="${session.id}">${session.title} · ${session.date} at ${session.time}</option>
     `).join("");
@@ -1488,7 +1498,8 @@ function partnersView() {
           <label class="field">
             <span>Select Session</span>
             <select class="select" name="sessionId" required>
-              <option value="" disabled selected>${hasSessions ? "Choose a session..." : "Create a session first"}</option>
+              <option value="" disabled selected>Choose a session...</option>
+              <option value="general">General</option>
               ${sessionOptions}
             </select>
           </label>
@@ -1502,7 +1513,7 @@ function partnersView() {
           </label>
           <div class="announcement-note"><strong>Note:</strong> This announcement will be sent to all participants in the selected session.</div>
           <div class="coach-form-actions">
-            <button class="btn btn-primary" type="submit" ${hasSessions ? "" : "disabled"}>Send Announcement</button>
+            <button class="btn btn-primary" type="submit">Send Announcement</button>
             <button class="btn btn-ghost" type="button" data-action="back">Cancel</button>
           </div>
         </form>
@@ -2257,6 +2268,14 @@ function addAnnouncement(id, announcement, subject = "") {
   if (!text) return;
   const title = subject.trim();
   const announcementText = title ? `${title}: ${text}` : text;
+  if (id === "general") {
+    setState({
+      generalAnnouncements: [announcementText, ...(state.generalAnnouncements || [])],
+      route: "partners",
+      authMessage: "General announcement sent.",
+    });
+    return;
+  }
   const sessions = state.sessions.map((session) => {
     if (session.id !== id) return session;
     return { ...session, announcements: [announcementText, ...(session.announcements || [])] };
