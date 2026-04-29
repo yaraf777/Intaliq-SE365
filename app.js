@@ -996,7 +996,7 @@ function profileDetailView() {
         ${profileSketchRow("✦", "Requests", "sessions")}
         ${profileSketchRow("↗", "My stats", "activities")}
         ${profileSketchRow("◷", "History", "activities")}
-        ${profileSketchRow("?", "Help", "help", "intaliqsupport@gmail.com")}
+        ${profileSketchRow("?", "Help", "help")}
       </div>
     </div>
   `);
@@ -1082,7 +1082,6 @@ function profileEditView() {
         <input type="hidden" name="fitnessLevel" value="${state.profile.fitnessLevel}" />
         <input type="hidden" name="specialty" value="${state.profile.specialty}" />
         <label class="field"><span>New password</span><input class="input" name="password" type="password" minlength="6" placeholder="Leave blank to keep current password" autocomplete="new-password" /></label>
-        <label class="field"><span>Bio</span><textarea class="textarea" name="bio">${state.profile.bio}</textarea></label>
         <button class="btn btn-primary activity-submit" type="submit">Update Profile</button>
       </form>
     </div>
