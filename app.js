@@ -1313,31 +1313,44 @@ function aiChatView() {
 
 function partnersView() {
   if (state.profile.role === "coach") {
+    const hasSessions = state.sessions.length > 0;
+    const sessionOptions = state.sessions.map((session) => `
+      <option value="${session.id}">${session.title} · ${session.date} at ${session.time}</option>
+    `).join("");
+
     return withTabs("partners", `
-      <div class="topbar coach-page-topbar">
-        <h1>Announce</h1>
-        ${button("+ Session", "btn-primary", "new-session")}
-      </div>
-      <div class="stack">
-        ${state.sessions.length ? state.sessions.map((session) => `
-          <form class="coach-announcement-card" data-form="announcement">
-            <div>
-              <h3>${session.title}</h3>
-              <p>${session.date} at ${session.time} · ${session.members.length}/${session.capacity} enrolled</p>
-            </div>
-            <label class="field">
-              <span>Message</span>
-              <textarea class="textarea" name="announcement" placeholder="Share an update with this session"></textarea>
-            </label>
-            <input type="hidden" name="sessionId" value="${session.id}" />
-            <button class="coach-action primary" type="submit">Post Announcement</button>
-            ${(session.announcements || []).length ? `
-              <div class="coach-posted-list">
-                ${(session.announcements || []).map((item) => `<span>${item}</span>`).join("")}
-              </div>
-            ` : ""}
-          </form>
-        `).join("") : `<div class="coach-empty"><strong>No sessions yet.</strong><span>Create a session before posting announcements.</span></div>`}
+      <div class="coach-session-form-screen">
+        <div class="coach-form-topbar">
+          <button class="member-view-all back-button" type="button" data-action="back">← Back</button>
+          <button class="coach-logout" type="button" data-action="signout">Logout</button>
+        </div>
+        ${state.authMessage ? `<div class="member-toast">${state.authMessage}</div>` : ""}
+        <form class="coach-announcement-form-card" data-form="announcement">
+          <div>
+            <h1>Make Announcement</h1>
+            <p>Send Updates to session participants</p>
+          </div>
+          <label class="field">
+            <span>Select Session</span>
+            <select class="select" name="sessionId" required>
+              <option value="" disabled selected>${hasSessions ? "Choose a session..." : "Create a session first"}</option>
+              ${sessionOptions}
+            </select>
+          </label>
+          <label class="field">
+            <span>Subject</span>
+            <input class="input" name="subject" placeholder="e.g., Location Change, Time Update, Important Notice" required />
+          </label>
+          <label class="field">
+            <span>Message</span>
+            <textarea class="textarea" name="announcement" placeholder="Write your announcement message..." required></textarea>
+          </label>
+          <div class="announcement-note"><strong>Note:</strong> This announcement will be sent to all participants in the selected session.</div>
+          <div class="coach-form-actions">
+            <button class="btn btn-primary" type="submit" ${hasSessions ? "" : "disabled"}>Send Announcement</button>
+            <button class="btn btn-ghost" type="button" data-action="back">Cancel</button>
+          </div>
+        </form>
       </div>
     `);
   }
@@ -1734,7 +1747,7 @@ async function handleForm(type, data) {
   }
 
   if (type === "announcement") {
-    addAnnouncement(data.sessionId, data.announcement);
+    addAnnouncement(data.sessionId, data.announcement, data.subject);
   }
 }
 
@@ -2075,14 +2088,20 @@ function admitUser(id, name) {
   setState({ sessions, activeSessionId: id, route: "session-detail" });
 }
 
-function addAnnouncement(id, announcement) {
+function addAnnouncement(id, announcement, subject = "") {
+  if (!id) {
+    setState({ route: "partners", authMessage: "Choose a session first." });
+    return;
+  }
   const text = announcement.trim();
   if (!text) return;
+  const title = subject.trim();
+  const announcementText = title ? `${title}: ${text}` : text;
   const sessions = state.sessions.map((session) => {
     if (session.id !== id) return session;
-    return { ...session, announcements: [text, ...(session.announcements || [])] };
+    return { ...session, announcements: [announcementText, ...(session.announcements || [])] };
   });
-  setState({ sessions, activeSessionId: id, route: "session-detail" });
+  setState({ sessions, activeSessionId: id, route: "partners", authMessage: "Announcement sent." });
 }
 
 async function openFindPartners() {
