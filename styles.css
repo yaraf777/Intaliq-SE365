@@ -1172,6 +1172,23 @@ button {
   text-align: left;
 }
 
+.partner-card {
+  padding: 14px;
+  border-radius: 16px;
+  display: grid;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #202020;
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.16);
+}
+
+.friend-row-static {
+  display: grid;
+  grid-template-columns: 48px 1fr auto;
+  gap: 12px;
+  align-items: center;
+}
+
 .friend-avatar {
   width: 48px;
   height: 48px;
@@ -1184,14 +1201,16 @@ button {
   font-weight: 900;
 }
 
-.friend-row strong {
+.friend-row strong,
+.friend-row-static strong {
   display: block;
   color: #202020;
   font-size: 18px;
   font-weight: 900;
 }
 
-.friend-row small {
+.friend-row small,
+.friend-row-static small {
   display: block;
   margin-top: 3px;
   color: rgba(32, 32, 32, 0.58);
@@ -1202,6 +1221,32 @@ button {
 .friend-row b {
   color: #202020;
   font-size: 30px;
+}
+
+.partner-interest-line {
+  min-height: 34px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  background: rgba(199, 255, 79, 0.16);
+  color: #315f0d;
+}
+
+.partner-interest-line svg {
+  width: 28px;
+  height: 28px;
+}
+
+.partner-interest-line span {
+  color: rgba(32, 32, 32, 0.62);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.partner-search .input {
+  background: rgba(255, 255, 255, 0.92);
 }
 
 .friend-empty {

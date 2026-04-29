@@ -42,6 +42,8 @@ const seedState = {
   sessions: [],
   joinedSessions: [],
   partners: [],
+  partnerDirectory: [],
+  partnerSearch: "",
 };
 
 let state = loadState();
@@ -918,7 +920,7 @@ function profileView() {
         ${message}
         <div class="more-menu-list">
           ${moreMenuRow("◉", "View Profile", "view-profile")}
-          ${moreMenuRow("◇", "Friends", "find-partners")}
+          ${moreMenuRow("◇", "Find Partners", "find-partners")}
           ${moreMenuRow("✦", "Chat with AI", "chat-ai")}
           ${moreMenuRow("?", "Help", "help")}
         </div>
@@ -1140,24 +1142,44 @@ function partnersView() {
     `);
   }
 
+  const query = state.partnerSearch.trim().toLowerCase();
+  const partners = state.partnerDirectory.filter((partner) => {
+    const searchable = [partner.name, partner.city, partner.primaryGoal, partner.role].join(" ").toLowerCase();
+    return !query || searchable.includes(query);
+  });
+
   return withTabs("partners", `
     <div class="topbar">
-      <h1>Friends</h1>
+      <h1>Find Partners</h1>
     </div>
     <div class="stack">
-      ${state.partners.length ? state.partners.map((name) => `
-        <button class="friend-row" data-action="open-friend-chat" data-name="${name}">
-          <span class="friend-avatar">${initials(name)}</span>
-          <span>
-            <strong>${name}</strong>
-            <small>Tap to start chatting</small>
-          </span>
-          <b>›</b>
-        </button>
-      `).join("") : `
+      <label class="field partner-search">
+        <span>Search users</span>
+        <input class="input" data-partner-search value="${state.partnerSearch}" placeholder="Search by name, city, or interest" />
+      </label>
+      ${partners.length ? partners.map((partner) => {
+        const connected = state.partners.includes(partner.name);
+        return `
+        <article class="partner-card">
+          <div class="friend-row-static">
+            <span class="friend-avatar">${initials(partner.name)}</span>
+            <span>
+              <strong>${partner.name}</strong>
+              <small>${partner.city || "City not set"}</small>
+            </span>
+            <span class="pill">${partner.role === "coach" ? "Coach" : "User"}</span>
+          </div>
+          <div class="partner-interest-line">
+            ${selectedInterests(partner.primaryGoal || partner.specialty).length ? selectedInterests(partner.primaryGoal || partner.specialty).map((item) => interestIcon(item)).join("") : "<span>No interests yet</span>"}
+          </div>
+          <button class="btn btn-primary" data-action="${connected ? "open-friend-chat" : "connect-partner"}" data-name="${partner.name}">${connected ? "Message" : "Connect"}</button>
+        </article>
+      `}).join("") : `
         <div class="member-empty friend-empty">
-          <strong>No friends yet.</strong>
-          <span>People you connect with will appear here. Tap a friend to start a chat.</span>
+          <strong>No partner accounts found.</strong>
+          <span>
+            ${state.partnerDirectory.length ? "Try a different search." : "When users create public profiles in Supabase, they will appear here."}
+          </span>
         </div>
       `}
     </div>
@@ -1404,6 +1426,10 @@ function bindEvents() {
       await handleForm(form.dataset.form, await formData(form));
     });
   });
+
+  app.querySelector("[data-partner-search]")?.addEventListener("input", (event) => {
+    setState({ partnerSearch: event.target.value });
+  });
 }
 
 function handleAction(action, data = {}) {
@@ -1431,7 +1457,7 @@ function handleAction(action, data = {}) {
     "profile-menu": () => navigate("profile"),
     "view-profile": () => navigate("profile-detail"),
     "view-profile-edit": () => navigate("profile-edit"),
-    "find-partners": () => navigate("partners"),
+    "find-partners": () => openFindPartners(),
     "open-friend-chat": () => setState({ activeFriendName: data.name, route: "friend-chat" }),
     "chat-ai": () => navigate("ai-chat"),
     help: () => setState({ route: "profile-detail", authMessage: "Help: intaliqsupport@gmail.com" }),
@@ -1726,6 +1752,7 @@ async function verifyEmailCode(data) {
   }
 
   state = loadState(finalUser);
+  await syncPublicProfile(profileFromUser(finalUser));
   setState({
     user: publicUser(finalUser),
     profile: profileFromUser(finalUser),
@@ -1794,6 +1821,8 @@ async function updateProfile(data) {
     }
   }
 
+  await syncPublicProfile(nextProfile);
+
   setState({
     profile: nextProfile,
     route: nextProfile.role === "coach" ? "profile" : "profile-detail",
@@ -1849,6 +1878,54 @@ function addAnnouncement(id, announcement) {
     return { ...session, announcements: [text, ...(session.announcements || [])] };
   });
   setState({ sessions, activeSessionId: id, route: "session-detail" });
+}
+
+async function openFindPartners() {
+  setState({ route: "partners", authMessage: "" });
+  await loadPartnerDirectory();
+}
+
+function normalizePartnerProfile(profile) {
+  const name = profile.name || profile.full_name || profile.username || profile.email?.split("@")[0] || "Intaliq user";
+  return {
+    id: profile.id || name,
+    name,
+    city: profile.city || profile.location || "",
+    role: profile.role || "member",
+    primaryGoal: profile.primary_goal || profile.primaryGoal || profile.interests || "",
+    specialty: profile.specialty || profile.coaching_specialty || "",
+  };
+}
+
+async function loadPartnerDirectory() {
+  if (!supabase || !state.user) return;
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("*")
+    .neq("id", state.user.id)
+    .order("name", { ascending: true });
+
+  if (error) {
+    setState({ partnerDirectory: [] });
+    return;
+  }
+
+  setState({ partnerDirectory: (data || []).map(normalizePartnerProfile) });
+}
+
+async function syncPublicProfile(profile = state.profile) {
+  if (!supabase || !state.user) return;
+  await supabase.from("profiles").upsert({
+    id: state.user.id,
+    name: profile.name,
+    email: profile.email,
+    role: profile.role,
+    city: profile.city,
+    primary_goal: profile.primaryGoal,
+    specialty: profile.specialty,
+    nationality: profile.nationality,
+    updated_at: new Date().toISOString(),
+  });
 }
 
 function connectPartner(name) {
