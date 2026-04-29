@@ -502,6 +502,7 @@ function memberHomeView() {
   const totalDistance = state.activities.reduce((total, activity) => total + Number(activity.distance || 0), 0);
   const calories = state.activities.reduce((total, activity) => total + activityCalories(activity), 0).toLocaleString();
   const activeDays = `${Math.min(7, new Set(state.activities.map((activity) => activity.time?.slice(0, 10))).size)}/7`;
+  const announcements = relevantAnnouncements();
   const message = state.authMessage ? `<div class="member-toast">${state.authMessage}</div>` : "";
   return withTabs("home", `
     <div class="member-dashboard">
@@ -529,6 +530,26 @@ function memberHomeView() {
       </section>
 
       <section class="member-section">
+        <h2>Important Announcements</h2>
+        ${announcements.length ? `
+          <div class="member-announcement-list">
+            ${announcements.map((item) => `
+              <article class="member-announcement-card">
+                <span>${item.sessionTitle}</span>
+                <strong>${item.title}</strong>
+                <p>${item.message}</p>
+              </article>
+            `).join("")}
+          </div>
+        ` : `
+          <div class="member-empty">
+            <strong>No important announcements yet.</strong>
+            <span>Updates from sessions you book will appear here.</span>
+          </div>
+        `}
+      </section>
+
+      <section class="member-section">
         <div class="member-section-head">
           <h2>Active Goals</h2>
           <button class="member-view-all" data-action="goals">View all <span>→</span></button>
@@ -542,6 +563,19 @@ function memberHomeView() {
       </section>
     </div>
   `);
+}
+
+function relevantAnnouncements() {
+  return state.sessions
+    .filter((session) => state.joinedSessions.includes(session.id))
+    .flatMap((session) => (session.announcements || []).map((announcement) => {
+      const [title, ...messageParts] = announcement.split(": ");
+      return {
+        sessionTitle: session.title,
+        title: messageParts.length ? title : "Session update",
+        message: messageParts.length ? messageParts.join(": ") : announcement,
+      };
+    }));
 }
 
 function memberStat(label, value, icon) {

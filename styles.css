@@ -754,6 +754,39 @@ button {
   color: #fff;
 }
 
+.member-announcement-list {
+  display: grid;
+  gap: 10px;
+}
+
+.member-announcement-card {
+  padding: 14px 15px;
+  border-radius: 13px;
+  display: grid;
+  gap: 6px;
+  background: rgba(96, 96, 96, 0.96);
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.22);
+}
+
+.member-announcement-card > span {
+  color: #c7ff4f;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.member-announcement-card strong {
+  color: #fff;
+  font-size: 16px;
+  line-height: 1.15;
+}
+
+.member-announcement-card p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 14px;
+  line-height: 1.35;
+}
+
 .member-toast {
   padding: 12px 14px;
   border: 1px solid rgba(199, 255, 79, 0.5);
