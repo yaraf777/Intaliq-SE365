@@ -32,6 +32,7 @@ const seedState = {
     bio: "",
   },
   goals: [],
+  activities: [],
   sessions: [],
   joinedSessions: [],
   partners: [],
@@ -210,6 +211,30 @@ function specialtyPicker(value = "") {
   `;
 }
 
+function activityTypePicker(value = "Running") {
+  const options = [
+    { value: "Running", label: "Run", icon: "Running" },
+    { value: "Cycling", label: "Bike", icon: "Cycling" },
+    { value: "Hiking", label: "Hike", icon: "Hiking" },
+  ];
+  return `
+    <fieldset class="activity-type-field">
+      <legend>Activity type</legend>
+      <div class="activity-type-options">
+        ${options.map((activity) => `
+          <label class="activity-type-option">
+            <input type="radio" name="type" value="${activity.value}" ${value === activity.value ? "checked" : ""} required />
+            <span class="activity-type-card">
+              ${interestIcon(activity.icon)}
+              <span>${activity.label}</span>
+            </span>
+          </label>
+        `).join("")}
+      </div>
+    </fieldset>
+  `;
+}
+
 function render() {
   phone?.classList.toggle("auth-phone", (state.route === "signin" || state.route === "verify") && !state.user);
 
@@ -218,7 +243,7 @@ function render() {
     return;
   }
 
-  const protectedRoutes = ["home", "goals", "sessions", "partners", "profile", "goal-form", "session-form", "session-detail"];
+  const protectedRoutes = ["home", "goals", "sessions", "partners", "profile", "goal-form", "activity-form", "session-form", "session-detail"];
   if (protectedRoutes.includes(state.route) && !state.user) {
     state.route = "signin";
   }
@@ -233,6 +258,7 @@ function render() {
     partners: partnersView,
     profile: profileView,
     "goal-form": goalFormView,
+    "activity-form": activityFormView,
     "session-form": sessionFormView,
     "session-detail": sessionDetailView,
   };
@@ -362,9 +388,9 @@ function homeView() {
 function memberHomeView() {
   const activeGoal = state.goals[0];
   const displayName = state.profile.name || "Intaliq athlete";
-  const thisWeekKm = state.goals.length ? `${(state.goals.length * 4.2 + state.joinedSessions.length * 2.1).toFixed(1)} km` : "0 km";
-  const calories = (state.goals.length * 120 + state.joinedSessions.length * 350).toLocaleString();
-  const activeDays = `${Math.min(7, state.goals.length + state.joinedSessions.length)}/7`;
+  const totalDistance = state.activities.reduce((total, activity) => total + Number(activity.distance || 0), 0);
+  const calories = state.activities.reduce((total, activity) => total + activityCalories(activity), 0).toLocaleString();
+  const activeDays = `${Math.min(7, new Set(state.activities.map((activity) => activity.time?.slice(0, 10))).size)}/7`;
   return withTabs("home", `
     <div class="member-dashboard">
       <header class="member-dashboard-head">
@@ -373,7 +399,7 @@ function memberHomeView() {
       </header>
 
       <section class="member-stat-grid" aria-label="User stats">
-        ${memberStat("This Week", thisWeekKm, "")}
+        ${memberStat("This Week", `${formatDistance(totalDistance)} km`, "")}
         ${memberStat("Calories", calories, "flame")}
         ${memberStat("Active Days", activeDays, "calendar")}
         ${memberStat("Sessions", state.joinedSessions.length, "group")}
@@ -437,6 +463,17 @@ function memberGoalCard(goal) {
       <div class="member-progress" style="--value: ${goal.progress}%"><span></span></div>
     </article>
   `;
+}
+
+function formatDistance(value) {
+  const distance = Number(value) || 0;
+  return Number.isInteger(distance) ? String(distance) : distance.toFixed(1);
+}
+
+function activityCalories(activity) {
+  const minutes = Number(activity.duration) || 0;
+  const factors = { Running: 11, Cycling: 8, Hiking: 7 };
+  return Math.round(minutes * (factors[activity.type] || 8));
 }
 
 function coachHomeView() {
@@ -569,6 +606,34 @@ function goalFormView() {
       <button class="btn btn-primary" type="submit">${isCoach ? "Create plan" : "Create goal"}</button>
       ${button("Back", "btn-ghost", "goals")}
     </form>
+  `);
+}
+
+function activityFormView() {
+  return withTabs("goals", `
+    <div class="activity-log-screen">
+      <button class="member-view-all back-button" data-action="back">Back</button>
+      <div>
+        <h1>Log Activity</h1>
+        <p>Choose one activity and add the workout details.</p>
+      </div>
+      <form class="activity-log-form" data-form="activity">
+        ${activityTypePicker("Running")}
+        <label class="field">
+          <span>Time of activity</span>
+          <input class="input" name="time" type="datetime-local" required />
+        </label>
+        <label class="field">
+          <span>Distance covered (km)</span>
+          <input class="input" name="distance" type="number" min="0" step="0.1" placeholder="5.0" required />
+        </label>
+        <label class="field">
+          <span>Activity duration (minutes)</span>
+          <input class="input" name="duration" type="number" min="1" step="1" placeholder="30" required />
+        </label>
+        <button class="btn btn-primary activity-submit" type="submit">Save Activity</button>
+      </form>
+    </div>
   `);
 }
 
@@ -895,6 +960,16 @@ function makeGoal(data) {
   };
 }
 
+function makeActivity(data) {
+  return {
+    id: crypto.randomUUID(),
+    type: data.type,
+    time: data.time,
+    distance: Number(data.distance),
+    duration: Number(data.duration),
+  };
+}
+
 function makeSession(data) {
   const id = data.title
     .replace(/[^a-z0-9]/gi, "")
@@ -952,7 +1027,7 @@ function handleAction(action, data = {}) {
     "mode-join": () => setState({ sessionMode: "join" }),
     "mode-mine": () => setState({ sessionMode: "mine" }),
     "session-detail": () => setState({ activeSessionId: data.id, route: "session-detail" }),
-    "log-activity": () => navigate("goal-form"),
+    "log-activity": () => navigate("activity-form"),
     "set-goal": () => navigate("goal-form"),
     "find-session": () => navigate("sessions"),
     "ai-coach": () => navigate("partners"),
@@ -1000,6 +1075,11 @@ async function handleForm(type, data) {
 
     const goal = makeGoal(data);
     setState({ goals: [goal, ...state.goals], route: type === "onboarding" ? "home" : "goals" });
+  }
+
+  if (type === "activity") {
+    const activity = makeActivity(data);
+    setState({ activities: [activity, ...state.activities], route: "home" });
   }
 
   if (type === "session") {

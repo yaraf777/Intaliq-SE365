@@ -754,6 +754,116 @@ button {
   color: #fff;
 }
 
+.activity-log-screen {
+  display: grid;
+  gap: 18px;
+}
+
+.activity-log-screen h1 {
+  margin: 0;
+  color: #fff;
+  font-size: 26px;
+  line-height: 1.1;
+}
+
+.activity-log-screen p {
+  margin: 7px 0 0;
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 15px;
+}
+
+.back-button {
+  justify-self: start;
+}
+
+.activity-log-form {
+  display: grid;
+  gap: 15px;
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(86, 86, 86, 0.86);
+  box-shadow: 0 18px 34px rgba(0, 0, 0, 0.22);
+}
+
+.activity-log-form .field span {
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 15px;
+}
+
+.activity-type-field {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.activity-type-field legend {
+  margin-bottom: 10px;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.activity-type-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.activity-type-option {
+  min-width: 0;
+}
+
+.activity-type-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.activity-type-card {
+  min-height: 82px;
+  padding: 10px 6px 8px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 5px;
+  border: 2px solid transparent;
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.24);
+  color: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 12px 20px rgba(0, 0, 0, 0.16);
+}
+
+.activity-type-card svg {
+  width: 31px;
+  height: 31px;
+  color: #c7ff4f;
+}
+
+.activity-type-card span {
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.activity-type-option input:checked + .activity-type-card {
+  border-color: #c7ff4f;
+  background: rgba(199, 255, 79, 0.2);
+  color: #fff;
+}
+
+.activity-type-option input:focus-visible + .activity-type-card {
+  outline: 2px solid #c7ff4f;
+  outline-offset: 2px;
+}
+
+.activity-submit {
+  min-height: 52px;
+  border-radius: 12px;
+  background: #c7ff4f;
+  color: #173006;
+  font-size: 17px;
+}
+
 .member-tabs-shell .tabs {
   background: rgba(91, 91, 91, 0.98);
   border-top: 0;
