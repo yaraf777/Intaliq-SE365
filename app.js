@@ -649,10 +649,22 @@ function statsPeriodTabs(activePeriod) {
 
 function coachHomeView() {
   const displayName = state.profile.name || "Coach";
-  const upcoming = state.sessions[0];
+  const upcoming = state.sessions[0] || {
+    id: "demo-running-crew",
+    title: "Morning Running Crew",
+    type: "Cardio",
+    level: "intermediate",
+    date: "Dec 22, 2024",
+    time: "6:00am",
+    capacity: 15,
+    members: Array.from({ length: 10 }, (_, index) => `Member ${index + 1}`),
+    notes: "King Abdullah Park, Riyadh",
+    isDemo: true,
+  };
   const pendingCount = state.sessions.reduce((total, session) => total + (session.pendingApplicants?.length || 0), 0);
   const totalMembers = state.sessions.reduce((total, session) => total + session.members.length, 0);
   const activeSessions = state.sessions.filter((session) => session.date !== "Completed").length;
+  const hasCoachData = state.sessions.length > 0;
   return withTabs("home", `
     <div class="coach-dashboard">
       <header class="coach-dashboard-head">
@@ -664,10 +676,10 @@ function coachHomeView() {
       </header>
 
       <section class="coach-stat-grid" aria-label="Coach stats">
-        ${coachStat("Active Sessions", activeSessions || state.sessions.length, "")}
-        ${coachStat("Total Members", Math.max(totalMembers, state.partners.length), "↑ 12%")}
-        ${coachStat("Pending Requests", pendingCount, "")}
-        ${coachStat("Total Sessions", state.sessions.length, "")}
+        ${coachStat("Active Sessions", hasCoachData ? activeSessions : 6, "")}
+        ${coachStat("Total Members", hasCoachData ? Math.max(totalMembers, state.partners.length) : 47, "↑ 12%")}
+        ${coachStat("Pending Requests", hasCoachData ? pendingCount : 8, "")}
+        ${coachStat("Total Sessions", hasCoachData ? state.sessions.length : 13, "")}
       </section>
 
       <section class="coach-section">
@@ -685,12 +697,7 @@ function coachHomeView() {
           <h2>Upcoming Sessions</h2>
           <button class="coach-view-all" data-action="sessions">View All <span>→</span></button>
         </div>
-        ${upcoming ? coachUpcomingCard(upcoming) : `
-          <div class="coach-empty">
-            <strong>No upcoming sessions yet.</strong>
-            <span>Create a new session to start admitting users and sharing announcements.</span>
-          </div>
-        `}
+        ${coachUpcomingCard(upcoming)}
       </section>
     </div>
   `);
@@ -710,8 +717,9 @@ function coachStat(label, value, trend) {
 
 function coachUpcomingCard(session) {
   const remaining = Math.max(0, session.capacity - session.members.length);
+  const actionAttrs = session.isDemo ? "" : `data-action="session-detail" data-id="${session.id}"`;
   return `
-    <article class="coach-session-card" data-action="session-detail" data-id="${session.id}">
+    <article class="coach-session-card" ${actionAttrs}>
       <div class="session-mark">${interestIcon(session.type === "Cardio" ? "Running" : "Cycling")}</div>
       <div class="coach-session-main">
         <div class="coach-session-title">
