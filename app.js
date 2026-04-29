@@ -21,6 +21,7 @@ const seedState = {
   pendingPrimaryGoal: "",
   pendingSpecialty: "",
   sessionMode: "join",
+  statsPeriod: "Day",
   user: null,
   profile: {
     name: "",
@@ -615,6 +616,16 @@ function statPeriodCard(period) {
   `;
 }
 
+function statsPeriodTabs(activePeriod) {
+  return `
+    <div class="stats-period-tabs" role="tablist" aria-label="Stats period">
+      ${["Day", "Week", "Month", "Year"].map((period) => `
+        <button class="${activePeriod === period ? "active" : ""}" data-action="set-stats-period" data-period="${period}" type="button">${period}</button>
+      `).join("")}
+    </div>
+  `;
+}
+
 function coachHomeView() {
   const displayName = state.profile.name || "Coach";
   const upcoming = state.sessions[0];
@@ -826,6 +837,7 @@ function activitiesView() {
 }
 
 function statsView() {
+  const period = state.statsPeriod || "Day";
   return withTabs("profile", `
     <div class="stats-screen">
       <button class="member-view-all back-button" data-action="view-profile">Back</button>
@@ -833,8 +845,9 @@ function statsView() {
         <h1>My stats</h1>
         <p>Distance covered and calories burned</p>
       </div>
-      <div class="stats-grid">
-        ${["Day", "Week", "Month", "Year"].map((period) => statPeriodCard(period)).join("")}
+      ${statsPeriodTabs(period)}
+      <div class="stats-selected">
+        ${statPeriodCard(period)}
       </div>
     </div>
   `);
@@ -1509,6 +1522,7 @@ function handleAction(action, data = {}) {
     "new-session": () => state.profile.role === "coach" ? navigate("session-form") : navigate("sessions"),
     "mode-join": () => setState({ sessionMode: "join" }),
     "mode-mine": () => setState({ sessionMode: "mine" }),
+    "set-stats-period": () => setState({ statsPeriod: data.period || "Day" }),
     "session-detail": () => setState({ activeSessionId: data.id, route: "session-detail" }),
     "goal-detail": () => setState({ activeGoalId: data.id, route: "goal-detail" }),
     "log-activity": () => navigate("activity-form"),

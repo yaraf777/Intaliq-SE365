@@ -845,18 +845,44 @@ button {
   gap: 18px;
 }
 
-.stats-grid {
+.stats-period-tabs {
+  min-height: 58px;
+  padding: 4px;
+  border: 3px solid #050505;
+  border-radius: 16px;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 13px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.stats-period-tabs button {
+  min-width: 0;
+  border: 2px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  color: #050505;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.stats-period-tabs button.active {
+  border-color: rgba(5, 5, 5, 0.14);
+  background: #7fc943;
+  color: #050505;
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.14);
+}
+
+.stats-selected {
+  display: grid;
 }
 
 .stat-period-card {
-  min-height: 220px;
-  padding: 15px;
+  min-height: 360px;
+  padding: 18px;
   border-radius: 15px;
   display: grid;
-  gap: 12px;
+  gap: 18px;
   background: rgba(96, 96, 96, 0.92);
   box-shadow: 0 16px 28px rgba(0, 0, 0, 0.2);
 }
@@ -864,14 +890,14 @@ button {
 .stat-period-card h2 {
   margin: 0;
   color: #fff;
-  font-size: 20px;
+  font-size: 28px;
 }
 
 .stat-chart {
-  height: 96px;
+  height: 180px;
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
+  gap: 20px;
   align-items: end;
   padding: 8px 6px 0;
   border-bottom: 2px solid rgba(255, 255, 255, 0.28);
@@ -882,15 +908,15 @@ button {
   display: grid;
   align-items: end;
   justify-items: center;
-  gap: 5px;
+  gap: 8px;
   color: rgba(255, 255, 255, 0.76);
-  font-size: 9px;
+  font-size: 13px;
   font-weight: 900;
 }
 
 .stat-chart b {
   width: 100%;
-  max-width: 34px;
+  max-width: 68px;
   height: var(--height);
   min-height: 8px;
   border-radius: 8px 8px 0 0;
@@ -908,17 +934,21 @@ button {
 
 .stat-values {
   display: grid;
-  gap: 8px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
 }
 
 .stat-values span {
+  padding: 12px;
+  border-radius: 12px;
   display: grid;
   gap: 2px;
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .stat-values strong {
   color: #fff;
-  font-size: 17px;
+  font-size: 22px;
   line-height: 1;
 }
 
