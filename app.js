@@ -93,9 +93,9 @@ function formData(form) {
   if (interests.length) {
     values.primaryGoal = interests.join(", ");
   }
-  const specialty = new FormData(form).get("coachSpecialty");
-  if (specialty) {
-    values.specialty = specialty;
+  const specialties = new FormData(form).getAll("coachSpecialty");
+  if (specialties.length) {
+    values.specialty = specialties.join(", ");
   }
   return values;
 }
@@ -186,6 +186,7 @@ function interestPicker(value = "") {
 }
 
 function specialtyPicker(value = "") {
+  const selected = selectedInterests(value);
   const options = [
     { value: "Running", label: "Running", icon: "Running" },
     { value: "Hiking", label: "Hiking", icon: "Hiking" },
@@ -197,7 +198,7 @@ function specialtyPicker(value = "") {
       <div class="interest-options">
         ${options.map((specialty) => `
           <label class="interest-option">
-            <input type="radio" name="coachSpecialty" value="${specialty.value}" ${value === specialty.value ? "checked" : ""} required />
+            <input type="checkbox" name="coachSpecialty" value="${specialty.value}" ${selected.includes(specialty.value) ? "checked" : ""} />
             <span class="interest-card">
               ${interestIcon(specialty.icon)}
               <span>${specialty.label}</span>
