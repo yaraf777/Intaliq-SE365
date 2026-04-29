@@ -1062,6 +1062,7 @@ function profileView() {
           ${moreMenuRow("◇", "Find Partners", "find-partners")}
           ${moreMenuRow("✦", "Chat with AI", "chat-ai")}
           ${moreMenuRow("?", "Help", "help", "intaliqsupport@gmail.com", false)}
+          ${moreMenuRow("↩", "Log out", "signout")}
         </div>
       </div>
     `);
