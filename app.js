@@ -271,7 +271,7 @@ function render() {
     return;
   }
 
-  const protectedRoutes = ["home", "activities", "goals", "sessions", "partners", "friend-chat", "profile", "profile-detail", "profile-edit", "ai-chat", "goal-form", "goal-detail", "activity-form", "session-form", "session-detail"];
+  const protectedRoutes = ["home", "activities", "stats", "goals", "sessions", "partners", "friend-chat", "profile", "profile-detail", "profile-edit", "ai-chat", "goal-form", "goal-detail", "activity-form", "session-form", "session-detail"];
   if (protectedRoutes.includes(state.route) && !state.user) {
     state.route = "signin";
   }
@@ -282,6 +282,7 @@ function render() {
     onboarding: onboardingView,
     home: homeView,
     activities: activitiesView,
+    stats: statsView,
     goals: goalsView,
     sessions: sessionsView,
     partners: partnersView,
@@ -576,6 +577,44 @@ function activityCard(activity) {
   `;
 }
 
+function activitiesForPeriod(period) {
+  const now = new Date();
+  return state.activities.filter((activity) => {
+    const date = new Date(activity.time);
+    if (Number.isNaN(date.getTime())) return false;
+    if (period === "Day") return date.toDateString() === now.toDateString();
+    if (period === "Week") {
+      const weekAgo = new Date(now);
+      weekAgo.setDate(now.getDate() - 7);
+      return date >= weekAgo && date <= now;
+    }
+    if (period === "Month") return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
+    return date.getFullYear() === now.getFullYear();
+  });
+}
+
+function statPeriodCard(period) {
+  const activities = activitiesForPeriod(period);
+  const distance = activities.reduce((total, activity) => total + Number(activity.distance || 0), 0);
+  const calories = activities.reduce((total, activity) => total + activityCalories(activity), 0);
+  const distanceHeight = Math.min(100, Math.max(8, distance * 10));
+  const calorieHeight = Math.min(100, Math.max(8, calories / 20));
+
+  return `
+    <article class="stat-period-card">
+      <h2>${period}</h2>
+      <div class="stat-chart" aria-label="${period} distance and calories chart">
+        <span style="--height: ${distanceHeight}%"><b></b><em>Distance</em></span>
+        <span style="--height: ${calorieHeight}%"><b></b><em>Calories</em></span>
+      </div>
+      <div class="stat-values">
+        <span><strong>${formatDistance(distance)} km</strong><small>Distance</small></span>
+        <span><strong>${calories.toLocaleString()}</strong><small>Calories</small></span>
+      </div>
+    </article>
+  `;
+}
+
 function coachHomeView() {
   const displayName = state.profile.name || "Coach";
   const upcoming = state.sessions[0];
@@ -781,6 +820,21 @@ function activitiesView() {
         ${state.activities.length
           ? state.activities.map((activity) => activityCard(activity)).join("")
           : `<div class="member-empty"><strong>No activities yet.</strong><span>Log a run, bike ride, or hike to see it here.</span></div>`}
+      </div>
+    </div>
+  `);
+}
+
+function statsView() {
+  return withTabs("profile", `
+    <div class="stats-screen">
+      <button class="member-view-all back-button" data-action="view-profile">Back</button>
+      <div class="member-page-topbar requests-head">
+        <h1>My stats</h1>
+        <p>Distance covered and calories burned</p>
+      </div>
+      <div class="stats-grid">
+        ${["Day", "Week", "Month", "Year"].map((period) => statPeriodCard(period)).join("")}
       </div>
     </div>
   `);
@@ -1004,7 +1058,7 @@ function profileDetailView() {
         ${profileSketchRow("◉", "Profile", "view-profile-edit")}
         ${profileSketchRow("◇", "Friends", "find-partners")}
         ${profileSketchRow("✦", "Requests", "sessions")}
-        ${profileSketchRow("↗", "My stats", "activities")}
+        ${profileSketchRow("↗", "My stats", "stats")}
         ${profileSketchRow("◷", "History", "activities")}
       </div>
     </div>

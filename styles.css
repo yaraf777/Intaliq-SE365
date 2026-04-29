@@ -840,6 +840,94 @@ button {
   font-weight: 900;
 }
 
+.stats-screen {
+  display: grid;
+  gap: 18px;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 13px;
+}
+
+.stat-period-card {
+  min-height: 220px;
+  padding: 15px;
+  border-radius: 15px;
+  display: grid;
+  gap: 12px;
+  background: rgba(96, 96, 96, 0.92);
+  box-shadow: 0 16px 28px rgba(0, 0, 0, 0.2);
+}
+
+.stat-period-card h2 {
+  margin: 0;
+  color: #fff;
+  font-size: 20px;
+}
+
+.stat-chart {
+  height: 96px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  align-items: end;
+  padding: 8px 6px 0;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.28);
+}
+
+.stat-chart span {
+  height: 100%;
+  display: grid;
+  align-items: end;
+  justify-items: center;
+  gap: 5px;
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.stat-chart b {
+  width: 100%;
+  max-width: 34px;
+  height: var(--height);
+  min-height: 8px;
+  border-radius: 8px 8px 0 0;
+  display: block;
+  background: #c7ff4f;
+}
+
+.stat-chart span:nth-child(2) b {
+  background: #ff9d20;
+}
+
+.stat-chart em {
+  font-style: normal;
+}
+
+.stat-values {
+  display: grid;
+  gap: 8px;
+}
+
+.stat-values span {
+  display: grid;
+  gap: 2px;
+}
+
+.stat-values strong {
+  color: #fff;
+  font-size: 17px;
+  line-height: 1;
+}
+
+.stat-values small {
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 11px;
+  font-weight: 900;
+}
+
 .activity-log-screen {
   display: grid;
   gap: 18px;
