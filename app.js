@@ -1564,6 +1564,7 @@ function handleAction(action, data = {}) {
     back: () => navigate(state.user ? "home" : "signin"),
     goals: () => navigate("goals"),
     stats: () => navigate("stats"),
+    history: () => navigate("history"),
     sessions: () => navigate("sessions"),
     "new-goal": () => navigate("goal-form"),
     "new-session": () => state.profile.role === "coach" ? navigate("session-form") : navigate("sessions"),
