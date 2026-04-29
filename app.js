@@ -3,6 +3,8 @@ import { createClient } from "@supabase/supabase-js";
 const STORAGE_PREFIX = "intaliq-app-state-v2";
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const productionAppUrl = "https://intaliq-se-365.vercel.app";
+const authRedirectUrl = import.meta.env.VITE_AUTH_REDIRECT_URL || productionAppUrl;
 const hasSupabaseConfig = Boolean(supabaseUrl && supabaseAnonKey);
 const supabase = hasSupabaseConfig ? createClient(supabaseUrl, supabaseAnonKey) : null;
 
@@ -863,7 +865,7 @@ async function handleAuth(data) {
     ? await supabase.auth.signUp({
         ...credentials,
         options: {
-          emailRedirectTo: window.location.origin,
+          emailRedirectTo: authRedirectUrl,
           data: {
             name: data.name || emailResult.email.split("@")[0],
             role: data.role === "coach" ? "coach" : "member",
@@ -925,6 +927,7 @@ async function sendEmailOtp(email, details = {}) {
     email,
     options: {
       shouldCreateUser: false,
+      emailRedirectTo: authRedirectUrl,
       data: {
         name,
         role,
