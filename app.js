@@ -75,11 +75,14 @@ function loadState(user = null) {
     return { ...structuredClone(seedState), user: user ? publicUser(user) : null, profile: profile || structuredClone(seedState).profile };
   }
   const parsed = JSON.parse(saved);
+  const mergedProfile = profile
+    ? { ...parsed.profile, ...profile, role: accountRole({ ...parsed.profile, ...profile }) }
+    : { ...structuredClone(seedState).profile, ...parsed.profile };
   return {
     ...structuredClone(seedState),
     ...parsed,
     user: user ? publicUser(user) : null,
-    profile: profile || { ...structuredClone(seedState).profile, ...parsed.profile },
+    profile: mergedProfile,
     authLoading: false,
   };
 }
@@ -139,13 +142,19 @@ function publicUser(user) {
   return { id: user.id, email: user.email };
 }
 
+function accountRole(source = {}) {
+  if (source.role === "coach") return "coach";
+  if (source.specialty || source.coaching_specialty) return "coach";
+  return "member";
+}
+
 function profileFromUser(user) {
   if (!user) return null;
   const meta = user.user_metadata || {};
   return {
     name: meta.name || meta.full_name || user.email?.split("@")[0] || "User",
     email: user.email || meta.email || "",
-    role: meta.role === "coach" ? "coach" : "member",
+    role: accountRole(meta),
     fitnessLevel: meta.fitnessLevel || "Beginner",
     primaryGoal: meta.primaryGoal || "",
     specialty: meta.specialty || "",
@@ -166,7 +175,7 @@ function profileFromPublicProfile(row, user = state.user) {
     ...baseProfile,
     name: row.name || baseProfile.name,
     email: row.email || baseProfile.email,
-    role: row.role === "coach" ? "coach" : "member",
+    role: accountRole(row),
     primaryGoal: row.primary_goal || row.primaryGoal || baseProfile.primaryGoal,
     specialty: row.specialty || baseProfile.specialty,
     city: row.city || baseProfile.city,
@@ -722,9 +731,9 @@ function coachHomeView() {
 
       <section class="coach-stat-grid" aria-label="Coach stats">
         ${coachStat("Active Sessions", hasCoachData ? activeSessions : 6, "")}
+        ${coachStat("Total Members", hasCoachData ? Math.max(totalMembers, state.partners.length) : 47, "↑ 12%")}
         ${coachStat("Pending Requests", hasCoachData ? pendingCount : 8, "")}
         ${coachStat("Total Sessions", hasCoachData ? state.sessions.length : 13, "")}
-        ${coachStat("Total Members", hasCoachData ? Math.max(totalMembers, state.partners.length) : 47, "↑ 12%")}
       </section>
 
       <section class="coach-section">
@@ -1649,14 +1658,8 @@ function handleAction(action, data = {}) {
     "open-friend-chat": () => setState({ activeFriendName: data.name, route: "friend-chat" }),
     "chat-ai": () => navigate("ai-chat"),
     help: () => setState({ route: "profile-detail", authMessage: "Help: intaliqsupport@gmail.com" }),
-    "review-requests": () => {
-      const target = state.sessions.find((session) => session.pendingApplicants?.length) || state.sessions[0];
-      setState(target ? { activeSessionId: target.id, route: "session-detail" } : { route: "sessions" });
-    },
-    "make-announcement": () => {
-      const target = state.sessions[0];
-      setState(target ? { activeSessionId: target.id, route: "session-detail" } : { route: "session-form" });
-    },
+    "review-requests": () => navigate("goals"),
+    "make-announcement": () => navigate("partners"),
     "join-session": () => joinSession(data.id),
     "leave-session": () => leaveSession(data.id),
     "admit-user": () => admitUser(data.id, data.name),
@@ -1942,12 +1945,13 @@ async function verifyEmailCode(data) {
     finalUser = updatedUserData.user || user;
   }
 
+  const finalProfile = profileFromUser(finalUser);
   state = loadState(finalUser);
-  await syncPublicProfile(profileFromUser(finalUser));
+  await syncPublicProfile(finalProfile);
   setState({
     user: publicUser(finalUser),
-    profile: profileFromUser(finalUser),
-    route: routeForProfile(profileFromUser(finalUser)),
+    profile: finalProfile,
+    route: routeForProfile(finalProfile),
     pendingEmail: "",
     pendingVerificationRole: "member",
     pendingVerificationName: "",
