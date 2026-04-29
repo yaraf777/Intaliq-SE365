@@ -922,7 +922,7 @@ function profileView() {
           ${moreMenuRow("◉", "View Profile", "view-profile")}
           ${moreMenuRow("◇", "Find Partners", "find-partners")}
           ${moreMenuRow("✦", "Chat with AI", "chat-ai")}
-          ${moreMenuRow("?", "Help", "help")}
+          ${moreMenuRow("?", "Help", "help", "intaliqsupport@gmail.com", false)}
         </div>
       </div>
     `);
@@ -959,12 +959,13 @@ function profileView() {
   `);
 }
 
-function moreMenuRow(icon, label, action) {
+function moreMenuRow(icon, label, action, meta = "", showArrow = true) {
   return `
     <button class="more-menu-row" data-action="${action}">
       <span class="more-row-icon">${icon}</span>
       <span>${label}</span>
-      <strong>›</strong>
+      ${meta ? `<em>${meta}</em>` : ""}
+      ${showArrow ? "<strong>›</strong>" : "<strong></strong>"}
     </button>
   `;
 }

@@ -928,6 +928,15 @@ button {
   line-height: 1;
 }
 
+.more-menu-row em {
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 900;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
 .profile-sketch-head {
   display: grid;
   justify-items: center;
