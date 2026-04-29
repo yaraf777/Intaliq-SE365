@@ -273,7 +273,7 @@ function render() {
     return;
   }
 
-  const protectedRoutes = ["home", "activities", "stats", "history", "goals", "sessions", "partners", "friend-chat", "profile", "profile-detail", "profile-edit", "ai-chat", "goal-form", "goal-detail", "activity-form", "session-form", "session-detail"];
+  const protectedRoutes = ["home", "activities", "stats", "history", "requests", "goals", "sessions", "partners", "friend-chat", "profile", "profile-detail", "profile-edit", "ai-chat", "goal-form", "goal-detail", "activity-form", "session-form", "session-detail"];
   if (protectedRoutes.includes(state.route) && !state.user) {
     state.route = "signin";
   }
@@ -286,6 +286,7 @@ function render() {
     activities: activitiesView,
     stats: statsView,
     history: historyView,
+    requests: requestsView,
     goals: goalsView,
     sessions: sessionsView,
     partners: partnersView,
@@ -941,16 +942,34 @@ function sessionsView() {
     `);
   }
 
-  const requests = state.sessions.filter((session) => (session.pendingApplicants || []).includes(state.profile.name || "New user"));
+  const offeredSessions = state.sessions.filter((session) => !state.joinedSessions.includes(session.id));
   return withTabs("sessions", `
     <div class="member-page-topbar requests-head">
-      <h1>Requests</h1>
-      <p>${requests.length} request${requests.length === 1 ? "" : "s"} received</p>
+      <h1>Sessions</h1>
+      <p>${offeredSessions.length} session${offeredSessions.length === 1 ? "" : "s"} offered</p>
     </div>
     <div class="stack" style="margin-top: 12px;">
-      ${requests.length
-        ? requests.map((session) => sessionCard(session)).join("")
-        : `<div class="member-empty"><strong>No requests yet.</strong><span>When you request to join approval-only sessions, they will appear here.</span></div>`}
+      ${offeredSessions.length
+        ? offeredSessions.map((session) => sessionCard(session)).join("")
+        : `<div class="member-empty"><strong>No sessions offered yet.</strong><span>Coach-created sessions will appear here when available.</span></div>`}
+    </div>
+  `);
+}
+
+function requestsView() {
+  const requests = state.sessions.filter((session) => (session.pendingApplicants || []).includes(state.profile.name || "New user"));
+  return withTabs("profile", `
+    <div class="history-screen">
+      <button class="member-view-all back-button" data-action="view-profile">Back</button>
+      <div class="member-page-topbar requests-head">
+        <h1>Requests</h1>
+        <p>${requests.length} request${requests.length === 1 ? "" : "s"} received</p>
+      </div>
+      <div class="stack" style="margin-top: 12px;">
+        ${requests.length
+          ? requests.map((session) => sessionCard(session)).join("")
+          : `<div class="member-empty"><strong>No requests yet.</strong><span>When you request to join approval-only sessions, they will appear here.</span></div>`}
+      </div>
     </div>
   `);
 }
@@ -1117,7 +1136,7 @@ function profileDetailView() {
       <div class="profile-sketch-list">
         ${profileSketchRow("◉", "Profile", "view-profile-edit")}
         ${profileSketchRow("◇", "Friends", "find-partners")}
-        ${profileSketchRow("✦", "Requests", "sessions")}
+        ${profileSketchRow("✦", "Requests", "requests")}
         ${profileSketchRow("↗", "My stats", "stats")}
         ${profileSketchRow("◷", "History", "history")}
       </div>
@@ -1565,6 +1584,7 @@ function handleAction(action, data = {}) {
     goals: () => navigate("goals"),
     stats: () => navigate("stats"),
     history: () => navigate("history"),
+    requests: () => navigate("requests"),
     sessions: () => navigate("sessions"),
     "new-goal": () => navigate("goal-form"),
     "new-session": () => state.profile.role === "coach" ? navigate("session-form") : navigate("sessions"),
