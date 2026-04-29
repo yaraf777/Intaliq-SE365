@@ -1082,12 +1082,17 @@ async function handleAuth(data) {
     if (response.data.session) {
       await supabase.auth.signOut();
     }
-    await sendEmailOtp(emailResult.email, {
-      role: data.role,
-      name: data.name || emailResult.email.split("@")[0],
-      fitnessLevel: data.fitnessLevel || "Beginner",
-      primaryGoal: data.primaryGoal || "",
-      specialty: data.specialty || "",
+    setState({
+      authLoading: false,
+      route: "verify",
+      pendingEmail: emailResult.email,
+      pendingVerificationRole: data.role === "coach" ? "coach" : "member",
+      pendingVerificationName: data.name || emailResult.email.split("@")[0],
+      pendingFitnessLevel: data.fitnessLevel || "Beginner",
+      pendingPrimaryGoal: data.primaryGoal || "",
+      pendingSpecialty: data.specialty || "",
+      authError: "",
+      authMessage: "Enter the 6-digit code sent to your email.",
     });
     return;
   }
