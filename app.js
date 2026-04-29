@@ -159,6 +159,47 @@ function profileFromUser(user) {
   };
 }
 
+function profileFromPublicProfile(row, user = state.user) {
+  if (!row) return null;
+  const baseProfile = profileFromUser(user) || structuredClone(seedState).profile;
+  return {
+    ...baseProfile,
+    name: row.name || baseProfile.name,
+    email: row.email || baseProfile.email,
+    role: row.role === "coach" ? "coach" : "member",
+    primaryGoal: row.primary_goal || row.primaryGoal || baseProfile.primaryGoal,
+    specialty: row.specialty || baseProfile.specialty,
+    city: row.city || baseProfile.city,
+    nationality: row.nationality || baseProfile.nationality,
+  };
+}
+
+function routeForProfile(profile = state.profile) {
+  const isCoach = profile.role === "coach";
+  if (isCoach) return state.sessions.length ? "home" : "onboarding";
+  return state.goals.length ? "home" : "onboarding";
+}
+
+function routeAllowedForRole(route, role = state.profile.role) {
+  const coachOnly = new Set(["activities", "stats", "history", "requests", "goal-form", "goal-detail", "activity-form"]);
+  const memberOnly = new Set([]);
+  if (role === "coach") return !coachOnly.has(route);
+  return !memberOnly.has(route);
+}
+
+async function profileWithDatabaseRole(user) {
+  const authProfile = profileFromUser(user);
+  if (!supabase || !user) return authProfile;
+
+  const { data } = await supabase
+    .from("profiles")
+    .select("id, name, email, role, city, primary_goal, specialty, nationality")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  return profileFromPublicProfile(data, user) || authProfile;
+}
+
 function initials(name) {
   return name
     .split(" ")
@@ -277,6 +318,10 @@ function render() {
   const protectedRoutes = ["home", "activities", "stats", "history", "requests", "goals", "sessions", "partners", "find-partners", "friend-chat", "profile", "profile-detail", "profile-edit", "ai-chat", "goal-form", "goal-detail", "activity-form", "session-form", "session-detail"];
   if (protectedRoutes.includes(state.route) && !state.user) {
     state.route = "signin";
+  }
+
+  if (state.user && !routeAllowedForRole(state.route, state.profile.role)) {
+    state.route = "home";
   }
 
   const views = {
@@ -1758,15 +1803,16 @@ async function handleAuth(data) {
 
   if (!isSignup) {
     const verifiedUser = response.data.user;
+    const verifiedProfile = await profileWithDatabaseRole(verifiedUser);
     await supabase.auth.signOut();
     await sendEmailOtp(
       emailResult.email,
       {
-        role: verifiedUser?.user_metadata?.role || "member",
-        name: verifiedUser?.user_metadata?.name || emailResult.email.split("@")[0],
-        fitnessLevel: verifiedUser?.user_metadata?.fitnessLevel || "Beginner",
-        primaryGoal: verifiedUser?.user_metadata?.primaryGoal || "",
-        specialty: verifiedUser?.user_metadata?.specialty || "",
+        role: verifiedProfile?.role || "member",
+        name: verifiedProfile?.name || emailResult.email.split("@")[0],
+        fitnessLevel: verifiedProfile?.fitnessLevel || "Beginner",
+        primaryGoal: verifiedProfile?.primaryGoal || "",
+        specialty: verifiedProfile?.specialty || "",
       },
     );
     return;
@@ -1901,7 +1947,7 @@ async function verifyEmailCode(data) {
   setState({
     user: publicUser(finalUser),
     profile: profileFromUser(finalUser),
-    route: state.profile.role === "coach" ? (state.sessions.length ? "home" : "onboarding") : (state.goals.length ? "home" : "onboarding"),
+    route: routeForProfile(profileFromUser(finalUser)),
     pendingEmail: "",
     pendingVerificationRole: "member",
     pendingVerificationName: "",
@@ -2110,12 +2156,16 @@ async function initAuth() {
 
   const { data, error } = await supabase.auth.getSession();
   const user = data.session?.user || null;
+  const hydratedProfile = await profileWithDatabaseRole(user);
   state = loadState(user);
   if (!user) {
     state.route = "signin";
     state.authMode = "signin";
-  } else if (state.route === "signin") {
-    state.route = state.profile.role === "coach" ? (state.sessions.length ? "home" : "onboarding") : (state.goals.length ? "home" : "onboarding");
+  } else {
+    state.profile = hydratedProfile || state.profile;
+    if (state.route === "signin" || !routeAllowedForRole(state.route, state.profile.role)) {
+      state.route = routeForProfile(state.profile);
+    }
   }
   if (error) {
     state.authError = error.message;
@@ -2123,10 +2173,16 @@ async function initAuth() {
   authReady = true;
   render();
 
-  supabase.auth.onAuthStateChange((_event, session) => {
+  supabase.auth.onAuthStateChange(async (_event, session) => {
     const userFromSession = session?.user || null;
+    const nextProfile = await profileWithDatabaseRole(userFromSession);
     state = loadState(userFromSession);
-    state.route = userFromSession ? state.route === "signin" ? "home" : state.route : "signin";
+    if (userFromSession) {
+      state.profile = nextProfile || state.profile;
+      state.route = state.route === "signin" || !routeAllowedForRole(state.route, state.profile.role) ? routeForProfile(state.profile) : state.route;
+    } else {
+      state.route = "signin";
+    }
     render();
   });
 }
