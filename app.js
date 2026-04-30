@@ -799,22 +799,10 @@ function statsPeriodTabs(activePeriod) {
 
 function coachHomeView() {
   const displayName = state.profile.name || "Coach";
-  const upcoming = state.sessions[0] || {
-    id: "demo-running-crew",
-    title: "Morning Running Crew",
-    type: "Cardio",
-    level: "intermediate",
-    date: "Dec 22, 2024",
-    time: "6:00am",
-    capacity: 15,
-    members: Array.from({ length: 10 }, (_, index) => `Member ${index + 1}`),
-    notes: "King Abdullah Park, Riyadh",
-    isDemo: true,
-  };
+  const upcoming = state.sessions[0];
   const pendingCount = state.sessions.reduce((total, session) => total + (session.pendingApplicants?.length || 0), 0);
   const totalMembers = state.sessions.reduce((total, session) => total + session.members.length, 0);
   const activeSessions = state.sessions.filter((session) => session.date !== "Completed").length;
-  const hasCoachData = state.sessions.length > 0;
   return withTabs("home", `
     <div class="coach-dashboard">
       <header class="coach-dashboard-head">
@@ -826,10 +814,10 @@ function coachHomeView() {
       </header>
 
       <section class="coach-stat-grid" aria-label="Coach stats">
-        ${coachStat("Active Sessions", hasCoachData ? activeSessions : 6, "")}
-        ${coachStat("Total Members", hasCoachData ? Math.max(totalMembers, state.partners.length) : 47, "↑ 12%")}
-        ${coachStat("Pending Requests", hasCoachData ? pendingCount : 8, "")}
-        ${coachStat("Total Sessions", hasCoachData ? state.sessions.length : 13, "")}
+        ${coachStat("Active Sessions", activeSessions, "")}
+        ${coachStat("Total Members", Math.max(totalMembers, state.partners.length), "")}
+        ${coachStat("Pending Requests", pendingCount, "")}
+        ${coachStat("Total Sessions", state.sessions.length, "")}
       </section>
 
       <section class="coach-section">
@@ -847,7 +835,12 @@ function coachHomeView() {
           <h2>Upcoming Sessions</h2>
           <button class="coach-view-all" data-action="sessions">View All <span>→</span></button>
         </div>
-        ${coachUpcomingCard(upcoming)}
+        ${upcoming ? coachUpcomingCard(upcoming) : `
+          <div class="coach-empty">
+            <strong>No upcoming sessions yet.</strong>
+            <span>Create your first session to start receiving members and requests.</span>
+          </div>
+        `}
       </section>
     </div>
   `);
