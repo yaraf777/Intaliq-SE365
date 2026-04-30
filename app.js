@@ -509,7 +509,11 @@ function signInView() {
 
 function onboardingView() {
   const isCoach = state.profile.role === "coach";
+  const message = state.authMessage ? `<div class="notice">${state.authMessage}</div>` : "";
+  const error = state.authError ? `<div class="notice danger-box">${state.authError}</div>` : "";
   return page(isCoach ? "Create your first session" : "Set your first goal", isCoach ? "Start by opening a workout session for users." : "Tell Intaliq what you want to move forward.", `
+    ${message}
+    ${error}
     <form class="stack" data-form="onboarding">
       ${isCoach ? sessionFields() : goalFields({ title: "", category: "Strength", due: "This week", progress: 0, checkpoints: ["", "", "", ""] })}
       <button class="btn btn-primary" type="submit">${isCoach ? "Create session" : "Save goal"}</button>
@@ -1247,12 +1251,16 @@ function sessionFormView() {
     `);
   }
 
+  const message = state.authMessage ? `<div class="member-toast">${state.authMessage}</div>` : "";
+  const error = state.authError ? `<div class="notice danger-box">${state.authError}</div>` : "";
   return withTabs("sessions", `
     <div class="coach-session-form-screen">
       <div class="coach-form-topbar">
         <button class="member-view-all back-button" data-action="sessions">← Back</button>
         <button class="coach-logout" data-action="signout">Logout</button>
       </div>
+      ${message}
+      ${error}
       <form class="coach-session-form-card" data-form="session">
         <div>
           <h1>Create Group Session</h1>
@@ -1691,7 +1699,7 @@ function sessionFields() {
   return `
     ${activityTypePicker("Running")}
     <label class="field"><span>Session Title</span><input class="input" name="title" placeholder="e.g., Morning Run Crew" required /></label>
-    <label class="field"><span>Date</span><input class="input" name="date" type="date" required /></label>
+    <label class="field"><span>Date</span><input class="input" name="date" type="date" min="${todayDateValue()}" required /></label>
     <label class="field"><span>Time</span><input class="input" name="time" type="time" required /></label>
     <label class="field"><span>Capacity</span><input class="input" name="capacity" type="number" min="2" max="50" placeholder="Maximum participants" required /></label>
     <label class="field"><span>Location</span><input class="input" name="location" placeholder="e.g., King Abdullah Park, Riyadh" required /></label>
@@ -1707,6 +1715,28 @@ function sessionFields() {
     </label>
     <input type="hidden" name="admission" value="Approval required" />
   `;
+}
+
+function todayDateValue() {
+  const now = new Date();
+  const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+  return localDate.toISOString().slice(0, 10);
+}
+
+function validateSessionSchedule(data) {
+  const today = todayDateValue();
+  if (!data.date || data.date < today) {
+    return "Choose today or a future date for the session.";
+  }
+
+  if (data.date === today && data.time) {
+    const selectedTime = new Date(`${data.date}T${data.time}`);
+    if (selectedTime < new Date()) {
+      return "Choose a future time for today's session.";
+    }
+  }
+
+  return "";
 }
 
 function goalCard(goal, compact = false) {
@@ -1875,7 +1905,7 @@ function handleAction(action, data = {}) {
     requests: () => navigate("requests"),
     sessions: () => navigate("sessions"),
     "new-goal": () => navigate("goal-form"),
-    "new-session": () => state.profile.role === "coach" ? navigate("session-form") : navigate("sessions"),
+    "new-session": () => state.profile.role === "coach" ? setState({ route: "session-form", authError: "", authMessage: "" }) : navigate("sessions"),
     "mode-join": () => setState({ sessionMode: "join" }),
     "mode-mine": () => setState({ sessionMode: "mine" }),
     "set-stats-period": () => setState({ statsPeriod: data.period || "Day" }),
@@ -1926,12 +1956,20 @@ async function handleForm(type, data) {
 
   if (type === "onboarding" || type === "goal") {
     if (type === "onboarding" && state.profile.role === "coach") {
+      const scheduleError = validateSessionSchedule(data);
+      if (scheduleError) {
+        setState({ authError: scheduleError, authMessage: "" });
+        return;
+      }
+
       const session = makeSession(data);
       setState({
         sessions: [session, ...state.sessions.filter((item) => item.id !== session.id)],
         joinedSessions: [...new Set([session.id, ...state.joinedSessions])],
         activeSessionId: session.id,
         route: "home",
+        authError: "",
+        authMessage: "",
       });
       return;
     }
@@ -1950,12 +1988,20 @@ async function handleForm(type, data) {
   }
 
   if (type === "session") {
+    const scheduleError = validateSessionSchedule(data);
+    if (scheduleError) {
+      setState({ route: "session-form", authError: scheduleError, authMessage: "" });
+      return;
+    }
+
     const session = makeSession(data);
     setState({
       sessions: [session, ...state.sessions.filter((item) => item.id !== session.id)],
       joinedSessions: [...new Set([session.id, ...state.joinedSessions])],
       activeSessionId: session.id,
       route: "session-detail",
+      authError: "",
+      authMessage: "",
     });
   }
 
