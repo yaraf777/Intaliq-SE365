@@ -77,10 +77,30 @@ function userStorageKey(userId = "guest") {
 
 function loadSharedSessions() {
   try {
-    return JSON.parse(localStorage.getItem(SHARED_SESSIONS_KEY) || "[]");
+    const shared = JSON.parse(localStorage.getItem(SHARED_SESSIONS_KEY) || "[]");
+    const migrated = mergeSessions([...shared, ...localStoredSessions()]);
+    if (migrated.length !== shared.length) {
+      localStorage.setItem(SHARED_SESSIONS_KEY, JSON.stringify(migrated));
+    }
+    return migrated;
   } catch {
     return [];
   }
+}
+
+function localStoredSessions() {
+  const sessions = [];
+  for (let index = 0; index < localStorage.length; index += 1) {
+    const key = localStorage.key(index);
+    if (!key?.startsWith(`${STORAGE_PREFIX}:`) || key === SHARED_SESSIONS_KEY) continue;
+    try {
+      const saved = JSON.parse(localStorage.getItem(key) || "{}");
+      if (Array.isArray(saved.sessions)) sessions.push(...saved.sessions);
+    } catch {
+      // Ignore old or malformed saved state entries.
+    }
+  }
+  return sessions;
 }
 
 function saveSharedSessions(sessions = []) {
@@ -116,6 +136,46 @@ function enrolledMembers(session, profile = state.profile) {
     blockedNames.add(profile.name);
   }
   return (session?.members || []).filter((member) => member && !blockedNames.has(member));
+}
+
+async function loadRemoteSessions() {
+  if (!supabase || !state.user) return [];
+  const { data, error } = await supabase
+    .from("app_sessions")
+    .select("id, data, created_at")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.warn("Unable to load shared sessions:", error.message);
+    return [];
+  }
+
+  return (data || []).map((row) => normalizeSessionEnrollment({ id: row.id, ...(row.data || {}) }));
+}
+
+async function saveRemoteSession(session) {
+  if (!supabase || !state.user || !session?.id) return;
+  const { error } = await supabase
+    .from("app_sessions")
+    .upsert({
+      id: session.id,
+      host_id: session.hostId || state.user.id,
+      data: session,
+      updated_at: new Date().toISOString(),
+    });
+
+  if (error) {
+    console.warn("Unable to save shared session:", error.message);
+  }
+}
+
+async function hydrateSharedSessions() {
+  const remoteSessions = await loadRemoteSessions();
+  if (!remoteSessions.length) return;
+  const sessions = mergeSessions([...remoteSessions, ...state.sessions]).map((session) => normalizeSessionEnrollment(session));
+  state = { ...state, sessions };
+  saveSharedSessions(sessions);
+  saveState();
 }
 
 function loadState(user = null) {
@@ -2034,6 +2094,7 @@ async function handleForm(type, data) {
       }
 
       const session = makeSession(data);
+      await saveRemoteSession(session);
       setState({
         sessions: [session, ...state.sessions.filter((item) => item.id !== session.id)],
         joinedSessions: state.joinedSessions,
@@ -2066,6 +2127,7 @@ async function handleForm(type, data) {
     }
 
     const session = makeSession(data);
+    await saveRemoteSession(session);
     setState({
       sessions: [session, ...state.sessions.filter((item) => item.id !== session.id)],
       joinedSessions: state.joinedSessions,
@@ -2397,6 +2459,7 @@ function joinSession(id) {
       const name = state.profile.name || "New user";
       return { ...session, pendingApplicants: [...new Set([...(session.pendingApplicants || []), name])] };
     });
+    saveRemoteSession(sessions.find((session) => session.id === id));
     setState({ sessions, activeSessionId: id, route: "session-detail", authMessage: "Request sent to the coach." });
     return;
   }
@@ -2406,6 +2469,7 @@ function joinSession(id) {
     if (session.id !== id || members.includes(state.profile.name)) return session;
     return { ...session, members: [...members, state.profile.name] };
   });
+  saveRemoteSession(sessions.find((session) => session.id === id));
   setState({ sessions, joinedSessions: [...new Set([...state.joinedSessions, id])], activeSessionId: id, route: "session-detail" });
 }
 
@@ -2427,6 +2491,7 @@ function admitUser(id, name) {
       members: [...new Set([...members, name])],
     };
   });
+  saveRemoteSession(sessions.find((session) => session.id === id));
   setState({ sessions, activeSessionId: id, route: "session-detail" });
 }
 
@@ -2573,6 +2638,7 @@ async function initAuth() {
     state.authMode = "signin";
   } else {
     state.profile = hydratedProfile || state.profile;
+    await hydrateSharedSessions();
     if (state.route === "signin" || !routeAllowedForRole(state.route, state.profile.role)) {
       state.route = routeForProfile(state.profile);
     }
@@ -2591,6 +2657,7 @@ async function initAuth() {
     state.futureFeatureMessage = "";
     if (userFromSession) {
       state.profile = nextProfile || state.profile;
+      await hydrateSharedSessions();
       state.route = state.route === "signin" || !routeAllowedForRole(state.route, state.profile.role) ? routeForProfile(state.profile) : state.route;
     } else {
       state.route = "signin";
