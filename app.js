@@ -183,6 +183,36 @@ async function loadRemoteSessions() {
   return (data || []).map((row) => normalizeSessionEnrollment({ id: row.id, ...(row.data || {}) })).filter(Boolean);
 }
 
+async function loadRemoteAdmissionRequests(sessions = []) {
+  if (!supabase || !state.user || !sessions.length) return sessions;
+  const { data, error } = await supabase
+    .from("app_session_requests")
+    .select("session_id, requester_name, status")
+    .eq("status", "pending");
+
+  if (error) {
+    console.warn("Unable to load admission requests:", error.message);
+    return sessions;
+  }
+
+  const requestsBySession = new Map();
+  (data || []).forEach((request) => {
+    if (!request.session_id || !request.requester_name) return;
+    const names = requestsBySession.get(request.session_id) || [];
+    requestsBySession.set(request.session_id, [...names, request.requester_name]);
+  });
+
+  return sessions.map((session) => ({
+    ...session,
+    pendingApplicants: [
+      ...new Set([
+        ...(session.pendingApplicants || []),
+        ...(requestsBySession.get(session.id) || []),
+      ]),
+    ],
+  }));
+}
+
 async function saveRemoteSession(session) {
   if (!supabase || !state.user || !session?.id) return;
   const sessionForRemote = normalizeSessionEnrollment({
@@ -201,6 +231,39 @@ async function saveRemoteSession(session) {
 
   if (error) {
     console.warn("Unable to save shared session:", error.message);
+  }
+}
+
+async function saveAdmissionRequest(session) {
+  if (!supabase || !state.user || !session?.id) return { error: null };
+  const { error } = await supabase
+    .from("app_session_requests")
+    .upsert({
+      session_id: session.id,
+      host_id: session.hostId,
+      requester_id: state.user.id,
+      requester_name: state.profile.name || "New user",
+      status: "pending",
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "session_id,requester_id" });
+
+  if (error) {
+    console.warn("Unable to save admission request:", error.message);
+  }
+  return { error };
+}
+
+async function updateAdmissionRequestStatus(sessionId, requesterName, status) {
+  if (!supabase || !state.user || !sessionId || !requesterName) return;
+  const { error } = await supabase
+    .from("app_session_requests")
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq("session_id", sessionId)
+    .eq("requester_name", requesterName)
+    .eq("status", "pending");
+
+  if (error) {
+    console.warn("Unable to update admission request:", error.message);
   }
 }
 
@@ -227,8 +290,8 @@ async function syncLocalCoachSessionsToRemote() {
 
 async function hydrateSharedSessions() {
   const localCoachSessions = await syncLocalCoachSessionsToRemote();
-  const remoteSessions = await loadRemoteSessions();
-  const sessions = mergeSessions([...remoteSessions, ...localCoachSessions, ...state.sessions]).map((session) => normalizeSessionEnrollment(session)).filter(Boolean);
+  const remoteSessions = await loadRemoteAdmissionRequests(await loadRemoteSessions());
+  const sessions = mergeSessions([...state.sessions, ...localCoachSessions, ...remoteSessions]).map((session) => normalizeSessionEnrollment(session)).filter(Boolean);
   state = { ...state, sessions };
   saveSharedSessions(sessions);
   saveState();
@@ -2521,7 +2584,7 @@ async function updateProfile(data) {
   });
 }
 
-function joinSession(id) {
+async function joinSession(id) {
   const selected = state.sessions.find((session) => session.id === id);
   if (state.profile.role === "coach" && isOwnSession(selected)) {
     showTemporaryMessage("Coaches cannot enroll in their own sessions.", { activeSessionId: id, route: "session-detail" });
@@ -2529,12 +2592,20 @@ function joinSession(id) {
   }
 
   if (selected?.admission === "Approval required" && state.profile.role !== "coach") {
+    if (!selected.hostId) {
+      setState({ activeSessionId: id, route: "session-detail", authError: "This session needs to be synced by its coach before requests can be sent.", authMessage: "" });
+      return;
+    }
+    const { error } = await saveAdmissionRequest(selected);
+    if (error) {
+      setState({ activeSessionId: id, route: "session-detail", authError: "Could not send the request yet. Please run the admission requests SQL in Supabase.", authMessage: "" });
+      return;
+    }
     const sessions = state.sessions.map((session) => {
       if (session.id !== id) return session;
       const name = state.profile.name || "New user";
       return { ...session, pendingApplicants: [...new Set([...(session.pendingApplicants || []), name])] };
     });
-    saveRemoteSession(sessions.find((session) => session.id === id));
     showTemporaryMessage("Request sent to the coach.", { sessions, activeSessionId: id, route: "session-detail" });
     return;
   }
@@ -2544,7 +2615,7 @@ function joinSession(id) {
     if (session.id !== id || members.includes(state.profile.name)) return session;
     return { ...session, members: [...members, state.profile.name] };
   });
-  saveRemoteSession(sessions.find((session) => session.id === id));
+  await saveRemoteSession(sessions.find((session) => session.id === id));
   setState({ sessions, joinedSessions: [...new Set([...state.joinedSessions, id])], activeSessionId: id, route: "session-detail" });
 }
 
@@ -2556,7 +2627,7 @@ function leaveSession(id) {
   setState({ sessions, joinedSessions: state.joinedSessions.filter((sessionId) => sessionId !== id), route: "sessions" });
 }
 
-function admitUser(id, name) {
+async function admitUser(id, name) {
   const sessions = state.sessions.map((session) => {
     if (session.id !== id) return session;
     const members = enrolledMembers(session);
@@ -2566,7 +2637,8 @@ function admitUser(id, name) {
       members: [...new Set([...members, name])],
     };
   });
-  saveRemoteSession(sessions.find((session) => session.id === id));
+  await updateAdmissionRequestStatus(id, name, "approved");
+  await saveRemoteSession(sessions.find((session) => session.id === id));
   setState({ sessions, activeSessionId: id, route: "session-detail" });
 }
 
