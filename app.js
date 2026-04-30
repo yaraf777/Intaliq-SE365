@@ -88,11 +88,18 @@ function loadState(user = null) {
     user: user ? publicUser(user) : null,
     profile: mergedProfile,
     authLoading: false,
+    confirmSignOut: false,
+    futureFeatureMessage: "",
   };
 }
 
 function saveState() {
-  const persistedState = { ...state, authLoading: false };
+  const persistedState = {
+    ...state,
+    authLoading: false,
+    confirmSignOut: false,
+    futureFeatureMessage: "",
+  };
   localStorage.setItem(userStorageKey(state.user?.id), JSON.stringify(persistedState));
 }
 
@@ -2185,6 +2192,7 @@ async function verifyEmailCode(data) {
     user: publicUser(finalUser),
     profile: finalProfile,
     route: routeForProfile(finalProfile),
+    confirmSignOut: false,
     pendingEmail: "",
     pendingVerificationRole: "member",
     pendingVerificationName: "",
@@ -2427,6 +2435,8 @@ async function initAuth() {
   const user = data.session?.user || null;
   const hydratedProfile = await profileWithDatabaseRole(user);
   state = loadState(user);
+  state.confirmSignOut = false;
+  state.futureFeatureMessage = "";
   if (!user) {
     state.route = "signin";
     state.authMode = "signin";
@@ -2446,6 +2456,8 @@ async function initAuth() {
     const userFromSession = session?.user || null;
     const nextProfile = await profileWithDatabaseRole(userFromSession);
     state = loadState(userFromSession);
+    state.confirmSignOut = false;
+    state.futureFeatureMessage = "";
     if (userFromSession) {
       state.profile = nextProfile || state.profile;
       state.route = state.route === "signin" || !routeAllowedForRole(state.route, state.profile.role) ? routeForProfile(state.profile) : state.route;
