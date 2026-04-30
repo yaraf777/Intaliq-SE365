@@ -1868,7 +1868,7 @@ function makeSession(data) {
     capacity: Number(data.capacity),
     location: data.location || "",
     members: [state.profile.name || "Host"],
-    pendingApplicants: data.admission === "Approval required" ? ["A new user"] : [],
+    pendingApplicants: [],
     announcements: [],
     notes: data.notes || "Focused workout session.",
     accessibility: data.accessibility || "None",
