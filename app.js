@@ -75,11 +75,25 @@ function userStorageKey(userId = "guest") {
 }
 
 function normalizeSessionEnrollment(session, profile = {}) {
-  const hostNames = new Set(["Host", profile.name].filter(Boolean));
   return {
     ...session,
-    members: (session.members || []).filter((member) => member && !hostNames.has(member)),
+    members: enrolledMembers(session, profile),
   };
+}
+
+function isOwnSession(session, profile = state.profile) {
+  if (!session) return false;
+  if (session.hostId && state.user?.id) return session.hostId === state.user.id;
+  if (session.hostName && profile.name) return session.hostName === profile.name;
+  return profile.role === "coach";
+}
+
+function enrolledMembers(session, profile = state.profile) {
+  const blockedNames = new Set(["Host", "A new user", session?.hostName].filter(Boolean));
+  if (profile.role === "coach" && isOwnSession(session, profile)) {
+    blockedNames.add(profile.name);
+  }
+  return (session?.members || []).filter((member) => member && !blockedNames.has(member));
 }
 
 function loadState(user = null) {
@@ -827,7 +841,7 @@ function coachHomeView() {
   const displayName = state.profile.name || "Coach";
   const upcoming = state.sessions[0];
   const pendingCount = state.sessions.reduce((total, session) => total + (session.pendingApplicants?.length || 0), 0);
-  const totalMembers = state.sessions.reduce((total, session) => total + session.members.length, 0);
+  const totalMembers = state.sessions.reduce((total, session) => total + enrolledMembers(session).length, 0);
   const activeSessions = state.sessions.filter((session) => session.date !== "Completed").length;
   return withTabs("home", `
     <div class="coach-dashboard">
@@ -885,7 +899,8 @@ function coachStat(label, value, trend) {
 }
 
 function coachUpcomingCard(session) {
-  const remaining = Math.max(0, session.capacity - session.members.length);
+  const members = enrolledMembers(session);
+  const remaining = Math.max(0, session.capacity - members.length);
   const actionAttrs = session.isDemo ? "" : `data-action="session-detail" data-id="${session.id}"`;
   return `
     <article class="coach-session-card" ${actionAttrs}>
@@ -899,7 +914,7 @@ function coachUpcomingCard(session) {
         <p>${session.date} at ${session.time}</p>
         <p>${session.location || session.notes || "Focused workout session."}</p>
         ${session.accessibility && session.accessibility !== "None" ? `<p>${session.accessibility === "Wheelchair-Friendly" ? "♿ " : ""}${session.accessibility}</p>` : ""}
-        <p>${session.members.length}/${session.capacity} enrolled - ${remaining} spot${remaining === 1 ? "" : "s"} left</p>
+        <p>${members.length}/${session.capacity} enrolled - ${remaining} spot${remaining === 1 ? "" : "s"} left</p>
       </div>
     </article>
   `;
@@ -1295,6 +1310,7 @@ function sessionDetailView() {
   const session = state.sessions.find((item) => item.id === state.activeSessionId) || state.sessions[0];
   const isCoach = state.profile.role === "coach";
   const joined = state.joinedSessions.includes(session.id);
+  const members = enrolledMembers(session);
   const pendingApplicants = session.pendingApplicants || [];
   const announcements = session.announcements || [];
   return page(session.title, `${session.date} · ${session.time}`, `
@@ -1307,7 +1323,7 @@ function sessionDetailView() {
         <p class="subtle">${session.notes}</p>
         ${session.accessibility && session.accessibility !== "None" ? `<div class="accessibility-badge">${session.accessibility === "Wheelchair-Friendly" ? "♿ " : ""}${session.accessibility}</div>` : ""}
         <div class="metric-row">
-          <div class="metric"><b>${session.members.length}</b><span>Joined</span></div>
+          <div class="metric"><b>${members.length}</b><span>Joined</span></div>
           <div class="metric"><b>${session.capacity}</b><span>Seats</span></div>
           <div class="metric"><b>${session.id}</b><span>Code</span></div>
         </div>
@@ -1338,7 +1354,7 @@ function sessionDetailView() {
         </div>
       ` : ""}
       <div class="card">
-        ${session.members.map((member) => `<div class="list-row"><span>${member}</span><span class="pill gray">member</span></div>`).join("")}
+        ${members.length ? members.map((member) => `<div class="list-row"><span>${member}</span><span class="pill gray">member</span></div>`).join("") : `<div class="empty">No enrolled users yet.</div>`}
       </div>
       ${isCoach ? "" : joined ? button("Leave session", "btn-ghost", "leave-session", `data-id="${session.id}"`) : button(session.admission === "Approval required" ? "Request to join" : "Join session", "btn-primary", "join-session", `data-id="${session.id}"`)}
       ${button("Back", "btn-ghost", "sessions")}
@@ -1800,6 +1816,7 @@ function sessionCard(session) {
   const joined = state.joinedSessions.includes(session.id);
   const pending = session.pendingApplicants?.length || 0;
   const accessibility = session.accessibility && session.accessibility !== "None" ? session.accessibility : "";
+  const members = enrolledMembers(session);
   return `
     <article class="session-card">
       <div class="session-head">
@@ -1809,7 +1826,7 @@ function sessionCard(session) {
         </div>
         <span class="pill ${joined ? "" : "warn"}">${joined ? "Joined" : session.type}</span>
       </div>
-      <div class="subtle">${session.members.length}/${session.capacity} people · ${session.level || "All levels"} · ${session.admission || "Open"}</div>
+      <div class="subtle">${members.length}/${session.capacity} people · ${session.level || "All levels"} · ${session.admission || "Open"}</div>
       ${state.profile.role === "coach"
         ? accessibility ? `<div class="accessibility-badge">${accessibility === "Wheelchair-Friendly" ? "♿ " : ""}${accessibility}</div>` : ""
         : `<div class="accessibility-row"><span>Accessibility</span><strong>${accessibility ? `${accessibility === "Wheelchair-Friendly" ? "♿ " : ""}${accessibility}` : ""}</strong></div>`}
@@ -1880,6 +1897,8 @@ function makeSession(data) {
     time: data.time,
     capacity: Number(data.capacity),
     location: data.location || "",
+    hostId: state.user?.id || "",
+    hostName: state.profile.name || "Coach",
     members: [],
     pendingApplicants: [],
     announcements: [],
@@ -2335,6 +2354,11 @@ async function updateProfile(data) {
 
 function joinSession(id) {
   const selected = state.sessions.find((session) => session.id === id);
+  if (state.profile.role === "coach" && isOwnSession(selected)) {
+    setState({ activeSessionId: id, route: "session-detail", authMessage: "Coaches cannot enroll in their own sessions." });
+    return;
+  }
+
   if (selected?.admission === "Approval required" && state.profile.role !== "coach") {
     const sessions = state.sessions.map((session) => {
       if (session.id !== id) return session;
@@ -2346,8 +2370,9 @@ function joinSession(id) {
   }
 
   const sessions = state.sessions.map((session) => {
-    if (session.id !== id || session.members.includes(state.profile.name)) return session;
-    return { ...session, members: [...session.members, state.profile.name] };
+    const members = enrolledMembers(session);
+    if (session.id !== id || members.includes(state.profile.name)) return session;
+    return { ...session, members: [...members, state.profile.name] };
   });
   setState({ sessions, joinedSessions: [...new Set([...state.joinedSessions, id])], activeSessionId: id, route: "session-detail" });
 }
@@ -2363,10 +2388,11 @@ function leaveSession(id) {
 function admitUser(id, name) {
   const sessions = state.sessions.map((session) => {
     if (session.id !== id) return session;
+    const members = enrolledMembers(session);
     return {
       ...session,
       pendingApplicants: (session.pendingApplicants || []).filter((candidate) => candidate !== name),
-      members: [...new Set([...session.members, name])],
+      members: [...new Set([...members, name])],
     };
   });
   setState({ sessions, activeSessionId: id, route: "session-detail" });
