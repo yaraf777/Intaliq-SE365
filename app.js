@@ -872,6 +872,7 @@ function coachUpcomingCard(session) {
         <p>Coach ${state.profile.name || "Intaliq"}</p>
         <p>${session.date} at ${session.time}</p>
         <p>${session.location || session.notes || "Focused workout session."}</p>
+        ${session.accessibility && session.accessibility !== "None" ? `<p>${session.accessibility === "Wheelchair-Friendly" ? "♿ " : ""}${session.accessibility}</p>` : ""}
         <p>${session.members.length}/${session.capacity} enrolled - ${remaining} spot${remaining === 1 ? "" : "s"} left</p>
       </div>
     </article>
@@ -1274,6 +1275,7 @@ function sessionDetailView() {
           <span class="pill ${joined || isCoach ? "" : "warn"}">${isCoach ? session.level : joined ? "Joined" : session.admission}</span>
         </div>
         <p class="subtle">${session.notes}</p>
+        ${session.accessibility && session.accessibility !== "None" ? `<div class="accessibility-badge">${session.accessibility === "Wheelchair-Friendly" ? "♿ " : ""}${session.accessibility}</div>` : ""}
         <div class="metric-row">
           <div class="metric"><b>${session.members.length}</b><span>Joined</span></div>
           <div class="metric"><b>${session.capacity}</b><span>Seats</span></div>
@@ -1676,6 +1678,14 @@ function sessionFields() {
     <label class="field"><span>Location</span><input class="input" name="location" placeholder="e.g., King Abdullah Park, Riyadh" required /></label>
     <label class="field"><span>Intensity Level</span><select class="select" name="level"><option>Beginner</option><option>Intermediate</option><option>Advanced</option></select></label>
     <label class="field"><span>Description</span><input class="input" name="notes" placeholder="e.g., any requirements, or expectations" /></label>
+    <label class="field accessibility-field">
+      <span>Accessibility</span>
+      <select class="select accessibility-select" name="accessibility">
+        <option value="None">None</option>
+        <option value="Wheelchair-Friendly">♿ Wheelchair-Friendly</option>
+        <option value="Elderly-Friendly">Elderly-Friendly</option>
+      </select>
+    </label>
     <input type="hidden" name="admission" value="Approval required" />
   `;
 }
@@ -1720,6 +1730,7 @@ function goalCard(goal, compact = false) {
 function sessionCard(session) {
   const joined = state.joinedSessions.includes(session.id);
   const pending = session.pendingApplicants?.length || 0;
+  const accessibility = session.accessibility && session.accessibility !== "None" ? session.accessibility : "";
   return `
     <article class="session-card">
       <div class="session-head">
@@ -1730,6 +1741,7 @@ function sessionCard(session) {
         <span class="pill ${joined ? "" : "warn"}">${joined ? "Joined" : session.type}</span>
       </div>
       <div class="subtle">${session.members.length}/${session.capacity} people · ${session.level || "All levels"} · ${session.admission || "Open"}</div>
+      ${accessibility ? `<div class="accessibility-badge">${accessibility === "Wheelchair-Friendly" ? "♿ " : ""}${accessibility}</div>` : ""}
       ${state.profile.role === "coach" && pending ? `<div class="notice">${pending} admission request${pending === 1 ? "" : "s"} waiting</div>` : ""}
       <div class="grid-2">
         <button class="btn btn-ghost" data-action="session-detail" data-id="${session.id}">Details</button>
@@ -1801,6 +1813,7 @@ function makeSession(data) {
     pendingApplicants: data.admission === "Approval required" ? ["A new user"] : [],
     announcements: [],
     notes: data.notes || "Focused workout session.",
+    accessibility: data.accessibility || "None",
   };
 }
 
