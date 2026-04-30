@@ -1625,12 +1625,12 @@ function withTabs(active, body) {
       <nav class="tabs" aria-label="Primary">
         ${isCoach
           ? `
-            ${tab("home", "⌂", "Home", active)}
+            ${tab("home", navIcon("home"), "Home", active)}
             ${tab("events", "!", "Events", active)}
-            ${tab("sessions", "●●●", "Sessions", active)}
-            ${tab("goals", "↟", "Admissions", active)}
-            ${tab("partners", "◔", "Announce", active)}
-            ${tab("profile", "•••", "More", active)}
+            ${tab("sessions", navIcon("sessions"), "Sessions", active)}
+            ${tab("goals", navIcon("activities"), "Admissions", active)}
+            ${tab("partners", navIcon("announce"), "Announce", active)}
+            ${tab("profile", navIcon("more"), "More", active)}
           `
           : `
             ${tab("home", navIcon("home"), "Home", active)}
@@ -1651,6 +1651,7 @@ function navIcon(name) {
     activities: `<svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="28" cy="7" r="4" fill="currentColor"/><path d="M24 14l-7 6 5 4 5-4 4 8 7 3 2-4-6-3-5-10zM21 27l-4 9-8 5 3 4 9-6 5-10zM29 31l7 5 2 8 5-1-3-10-9-7z" fill="currentColor"/><path d="M15 35l8 8 18-21" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
     sessions: `<svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="12" r="6" fill="currentColor"/><circle cx="10" cy="16" r="5" fill="currentColor"/><circle cx="38" cy="16" r="5" fill="currentColor"/><path d="M13 34c0-8 5-13 11-13s11 5 11 13v3H13zM2 35c0-7 4-12 9-12 3 0 5 1 7 3-3 3-5 7-5 12H2zM35 38c0-5-2-9-5-12 2-2 4-3 7-3 5 0 9 5 9 12v3z" fill="currentColor"/></svg>`,
     goals: `<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M39 23a15 15 0 1 1-10-13M33 7A20 20 0 1 0 44 18" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><circle cx="24" cy="24" r="9" fill="none" stroke="currentColor" stroke-width="4"/><circle cx="24" cy="24" r="3" fill="currentColor"/><path d="M24 24 41 7M36 6h6v6" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+    announce: `<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M7 29h8l19 10V9L15 19H7z" fill="currentColor"/><path d="M37 18c3 2 3 10 0 12M42 14c5 5 5 15 0 20" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><path d="M15 29l3 12h7l-5-13z" fill="currentColor"/></svg>`,
     more: `<svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="12" cy="24" r="6" fill="currentColor"/><circle cx="24" cy="24" r="6" fill="currentColor"/><circle cx="36" cy="24" r="6" fill="currentColor"/></svg>`,
   };
   return icons[name] || "";

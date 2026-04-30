@@ -2000,6 +2000,11 @@ button {
   font-size: 22px;
 }
 
+.coach-tabs-shell .tab strong svg {
+  width: 27px;
+  height: 27px;
+}
+
 .coach-tabs-shell .tab.active {
   background: transparent;
   color: #fff;
