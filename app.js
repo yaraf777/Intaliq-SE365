@@ -847,6 +847,7 @@ function memberHomeView() {
   const totalDistance = state.activities.reduce((total, activity) => total + Number(activity.distance || 0), 0);
   const calories = state.activities.reduce((total, activity) => total + activityCalories(activity), 0).toLocaleString();
   const activeDays = `${Math.min(7, new Set(state.activities.map((activity) => activity.time?.slice(0, 10))).size)}/7`;
+  const bookedSessions = state.sessions.filter((session) => sessionConfirmedForUser(session));
   const announcements = relevantAnnouncements();
   const message = state.authMessage ? `<div class="member-toast">${state.authMessage}</div>` : "";
   return withTabs("home", `
@@ -872,6 +873,23 @@ function memberHomeView() {
           <button class="member-action ghost" data-action="find-session"><span class="mini-group">●●●</span><span>Find Session</span></button>
           <button class="member-action ghost" data-action="ai-coach"><span class="spark-icon">✦</span><span>AI Coach</span></button>
         </div>
+      </section>
+
+      <section class="member-section booked-session-section">
+        <div class="member-section-head">
+          <h2>My Booked Sessions</h2>
+          ${bookedSessions.length ? `<button class="member-view-all" data-action="booked-sessions">View all <span>→</span></button>` : ""}
+        </div>
+        ${bookedSessions.length ? `
+          <div class="booked-session-list">
+            ${bookedSessions.slice(0, 2).map((session) => bookedSessionCard(session)).join("")}
+          </div>
+        ` : `
+          <button class="booked-session-empty" data-action="find-session">
+            <strong>No booked sessions yet.</strong>
+            <span>Admitted sessions will appear here.</span>
+          </button>
+        `}
       </section>
 
       <section class="member-section">
@@ -908,6 +926,17 @@ function memberHomeView() {
       </section>
     </div>
   `);
+}
+
+function bookedSessionCard(session) {
+  return `
+    <button class="booked-session-card" data-action="session-detail" data-id="${session.id}">
+      <span>${interestIcon(session.type)}</span>
+      <strong>${session.title}</strong>
+      <small>${session.date} · ${session.time}</small>
+      <em>Confirmed</em>
+    </button>
+  `;
 }
 
 function relevantAnnouncements() {
@@ -2260,6 +2289,7 @@ function handleAction(action, data = {}) {
     "log-activity": () => navigate("activity-form"),
     "set-goal": () => navigate("goal-form"),
     "find-session": () => navigate("sessions"),
+    "booked-sessions": () => setState({ route: "history", historyTab: "sessions", authError: "", authMessage: "" }),
     "ai-coach": () => navigate("ai-chat"),
     "profile-menu": () => navigate("profile"),
     "view-profile": () => navigate("profile-detail"),
