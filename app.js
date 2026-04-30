@@ -175,6 +175,15 @@ function sessionRequestPending(session, profile = null) {
   return Boolean(session?.pendingApplicants?.includes(activeName));
 }
 
+function sessionConfirmedForUser(session, profile = null) {
+  const currentState = activeState();
+  const activeProfile = profile || currentState.profile || seedState.profile;
+  return Boolean(
+    currentState.joinedSessions?.includes(session?.id)
+    || enrolledMembers(session, activeProfile).includes(activeProfile.name)
+  );
+}
+
 async function loadRemoteSessions() {
   if (!supabase || !state.user) return [];
   const { data, error } = await supabase
@@ -190,26 +199,33 @@ async function loadRemoteSessions() {
   return (data || []).map((row) => normalizeSessionEnrollment({ id: row.id, ...(row.data || {}) })).filter(Boolean);
 }
 
-async function loadRemoteAdmissionRequests(sessions = []) {
-  if (!supabase || !state.user || !sessions.length) return sessions;
+async function loadRemoteAdmissionState(sessions = []) {
+  if (!supabase || !state.user || !sessions.length) return { sessions, approvedSessionIds: [] };
   const { data, error } = await supabase
     .from("app_session_requests")
-    .select("session_id, requester_name, status")
-    .eq("status", "pending");
+    .select("session_id, requester_id, requester_name, status");
 
   if (error) {
     console.warn("Unable to load admission requests:", error.message);
-    return sessions;
+    return { sessions, approvedSessionIds: [] };
   }
 
   const requestsBySession = new Map();
+  const approvedSessionIds = [];
   (data || []).forEach((request) => {
     if (!request.session_id || !request.requester_name) return;
-    const names = requestsBySession.get(request.session_id) || [];
-    requestsBySession.set(request.session_id, [...names, request.requester_name]);
+    if (request.status === "pending") {
+      const names = requestsBySession.get(request.session_id) || [];
+      requestsBySession.set(request.session_id, [...names, request.requester_name]);
+    }
+    if (request.status === "approved" && request.requester_id === state.user.id) {
+      approvedSessionIds.push(request.session_id);
+    }
   });
 
-  return sessions.map((session) => ({
+  return {
+    approvedSessionIds,
+    sessions: sessions.map((session) => ({
     ...session,
     pendingApplicants: [
       ...new Set([
@@ -217,7 +233,8 @@ async function loadRemoteAdmissionRequests(sessions = []) {
         ...(requestsBySession.get(session.id) || []),
       ]),
     ],
-  }));
+    })),
+  };
 }
 
 async function saveRemoteSession(session) {
@@ -297,9 +314,21 @@ async function syncLocalCoachSessionsToRemote() {
 
 async function hydrateSharedSessions() {
   const localCoachSessions = await syncLocalCoachSessionsToRemote();
-  const remoteSessions = await loadRemoteAdmissionRequests(await loadRemoteSessions());
+  const admissionState = await loadRemoteAdmissionState(await loadRemoteSessions());
+  const remoteSessions = admissionState.sessions;
   const sessions = mergeSessions([...state.sessions, ...localCoachSessions, ...remoteSessions]).map((session) => normalizeSessionEnrollment(session)).filter(Boolean);
-  state = { ...state, sessions };
+  const confirmedSessionIds = state.profile.role === "coach"
+    ? []
+    : sessions
+      .filter((session) => admissionState.approvedSessionIds.includes(session.id) || enrolledMembers(session).includes(state.profile.name))
+      .map((session) => session.id);
+  state = {
+    ...state,
+    sessions,
+    joinedSessions: state.profile.role === "coach"
+      ? []
+      : [...new Set([...(state.joinedSessions || []), ...confirmedSessionIds])],
+  };
   saveSharedSessions(sessions);
   saveState();
 }
@@ -883,7 +912,7 @@ function memberHomeView() {
 
 function relevantAnnouncements() {
   return state.sessions
-    .filter((session) => state.joinedSessions.includes(session.id))
+    .filter((session) => sessionConfirmedForUser(session))
     .flatMap((session) => (session.announcements || []).map((announcement) => {
       const [title, ...messageParts] = announcement.split(": ");
       return {
@@ -912,7 +941,7 @@ function eventNotificationsByType() {
 
   const relevantSessions = state.profile.role === "coach"
     ? state.sessions
-    : state.sessions.filter((session) => state.joinedSessions.includes(session.id));
+    : state.sessions.filter((session) => sessionConfirmedForUser(session));
 
   relevantSessions
     .forEach((session) => {
@@ -1386,7 +1415,7 @@ function historyTabs(activeTab) {
 
 function historyView() {
   const activeTab = state.historyTab || "sessions";
-  const bookedSessions = state.sessions.filter((session) => state.joinedSessions.includes(session.id));
+  const bookedSessions = state.sessions.filter((session) => sessionConfirmedForUser(session));
   const partnerRequests = state.partners;
 
   return withTabs("profile", `
@@ -1461,7 +1490,7 @@ function sessionsView() {
     `);
   }
 
-  const offeredSessions = state.sessions.filter((session) => !state.joinedSessions.includes(session.id) && !isOwnSession(session));
+  const offeredSessions = state.sessions.filter((session) => !sessionConfirmedForUser(session) && !isOwnSession(session));
   return withTabs("sessions", `
     <div class="member-page-topbar requests-head">
       <h1>Sessions</h1>
@@ -1567,13 +1596,19 @@ function sessionFormView() {
 function sessionDetailView() {
   const session = state.sessions.find((item) => item.id === state.activeSessionId) || state.sessions[0];
   const isCoach = state.profile.role === "coach";
-  const joined = state.joinedSessions.includes(session.id);
+  const joined = sessionConfirmedForUser(session);
   const requestPending = sessionRequestPending(session);
   const members = enrolledMembers(session);
   const pendingApplicants = session.pendingApplicants || [];
   const announcements = session.announcements || [];
   return page(session.title, `${session.date} · ${session.time}`, `
     <div class="stack">
+      ${!isCoach && joined ? `
+        <div class="notice session-request-notice">
+          <strong>Session confirmed</strong>
+          <span>You have been admitted by the coach.</span>
+        </div>
+      ` : ""}
       ${!isCoach && requestPending && !joined ? `
         <div class="notice session-request-notice">
           <strong>Request sent</strong>
@@ -2078,7 +2113,7 @@ function goalCard(goal, compact = false) {
 }
 
 function sessionCard(session) {
-  const joined = state.joinedSessions.includes(session.id);
+  const joined = sessionConfirmedForUser(session);
   const requestPending = sessionRequestPending(session);
   const pending = session.pendingApplicants?.length || 0;
   const accessibility = session.accessibility && session.accessibility !== "None" ? session.accessibility : "";
