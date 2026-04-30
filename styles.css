@@ -521,6 +521,14 @@ button {
 .tab strong {
   font-size: 18px;
   line-height: 1;
+  display: grid;
+  place-items: center;
+  min-height: 24px;
+}
+
+.tab strong svg {
+  width: 25px;
+  height: 25px;
 }
 
 .tab.active {
@@ -1576,6 +1584,11 @@ button {
 .member-tabs-shell .tab strong {
   color: #c7ff4f;
   font-size: 22px;
+}
+
+.member-tabs-shell .tab strong svg {
+  width: 27px;
+  height: 27px;
 }
 
 .events-screen {
