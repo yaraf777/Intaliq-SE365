@@ -1741,7 +1741,9 @@ function sessionCard(session) {
         <span class="pill ${joined ? "" : "warn"}">${joined ? "Joined" : session.type}</span>
       </div>
       <div class="subtle">${session.members.length}/${session.capacity} people · ${session.level || "All levels"} · ${session.admission || "Open"}</div>
-      ${accessibility ? `<div class="accessibility-badge">${accessibility === "Wheelchair-Friendly" ? "♿ " : ""}${accessibility}</div>` : ""}
+      ${state.profile.role === "coach"
+        ? accessibility ? `<div class="accessibility-badge">${accessibility === "Wheelchair-Friendly" ? "♿ " : ""}${accessibility}</div>` : ""
+        : `<div class="accessibility-row"><span>Accessibility</span><strong>${accessibility ? `${accessibility === "Wheelchair-Friendly" ? "♿ " : ""}${accessibility}` : ""}</strong></div>`}
       ${state.profile.role === "coach" && pending ? `<div class="notice">${pending} admission request${pending === 1 ? "" : "s"} waiting</div>` : ""}
       <div class="grid-2">
         <button class="btn btn-ghost" data-action="session-detail" data-id="${session.id}">Details</button>

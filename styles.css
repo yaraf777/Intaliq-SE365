@@ -2123,6 +2123,30 @@ button {
   font-weight: 900;
 }
 
+.accessibility-row {
+  min-height: 34px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+  background: rgba(199, 255, 79, 0.14);
+  color: #173006;
+}
+
+.accessibility-row span {
+  color: rgba(23, 48, 6, 0.72);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.accessibility-row strong {
+  color: #173006;
+  font-size: 12px;
+  font-weight: 900;
+}
+
 .coach-form-actions {
   display: grid;
   grid-template-columns: 1fr auto;
