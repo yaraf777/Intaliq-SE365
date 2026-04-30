@@ -17,6 +17,7 @@ const seedState = {
   authLoading: false,
   confirmSignOut: false,
   confirmJoinSessionId: "",
+  confirmDeleteSessionId: "",
   futureFeatureMessage: "",
   pendingEmail: "",
   pendingVerificationRole: "member",
@@ -291,6 +292,20 @@ async function updateAdmissionRequestStatus(sessionId, requesterName, status) {
   }
 }
 
+async function deleteRemoteSession(session) {
+  if (!supabase || !state.user || !session?.id) return { error: null };
+  const { error } = await supabase
+    .from("app_sessions")
+    .delete()
+    .eq("id", session.id)
+    .eq("host_id", state.user.id);
+
+  if (error) {
+    console.warn("Unable to delete shared session:", error.message);
+  }
+  return { error };
+}
+
 function sessionBelongsToCurrentCoach(session) {
   if (state.profile.role !== "coach" || !session) return false;
   if (!session.hostId && !session.hostName) return true;
@@ -381,6 +396,7 @@ function saveState() {
     authMessage: "",
     confirmSignOut: false,
     confirmJoinSessionId: "",
+    confirmDeleteSessionId: "",
     futureFeatureMessage: "",
   };
   localStorage.setItem(userStorageKey(state.user?.id), JSON.stringify(persistedState));
@@ -404,7 +420,7 @@ function showTemporaryMessage(message, patch = {}, timeout = 2500) {
 
 function navigate(route) {
   if (messageTimer) clearTimeout(messageTimer);
-  setState({ route, authError: "", authMessage: "", confirmJoinSessionId: "" });
+  setState({ route, authError: "", authMessage: "", confirmJoinSessionId: "", confirmDeleteSessionId: "" });
   if (state.user && state.profile.role === "coach" && route === "goals") {
     hydrateSharedSessions().then(render);
   }
@@ -667,7 +683,7 @@ function render() {
     "session-detail": sessionDetailView,
   };
 
-  app.innerHTML = (views[state.route] || signInView)() + signOutConfirmModal() + joinSessionConfirmModal() + futureFeatureModal();
+  app.innerHTML = (views[state.route] || signInView)() + signOutConfirmModal() + joinSessionConfirmModal() + deleteSessionConfirmModal() + futureFeatureModal();
   bindEvents();
 }
 
@@ -698,6 +714,23 @@ function joinSessionConfirmModal() {
         <div class="confirm-actions">
           <button class="btn btn-ghost" data-action="cancel-join-session">Cancel</button>
           <button class="btn btn-primary" data-action="confirm-join-session" data-id="${state.confirmJoinSessionId}">Request Join</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function deleteSessionConfirmModal() {
+  if (!state.confirmDeleteSessionId) return "";
+  const session = state.sessions.find((item) => item.id === state.confirmDeleteSessionId);
+  return `
+    <div class="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="delete-session-title">
+      <div class="confirm-dialog">
+        <h2 id="delete-session-title">Delete session?</h2>
+        <p>This will remove ${session?.title || "this session"} from every user and coach view.</p>
+        <div class="confirm-actions">
+          <button class="btn btn-ghost" data-action="cancel-delete-session">Cancel</button>
+          <button class="btn btn-danger" data-action="confirm-delete-session" data-id="${state.confirmDeleteSessionId}">Delete</button>
         </div>
       </div>
     </div>
@@ -1625,6 +1658,7 @@ function sessionFormView() {
 function sessionDetailView() {
   const session = state.sessions.find((item) => item.id === state.activeSessionId) || state.sessions[0];
   const isCoach = state.profile.role === "coach";
+  const canDeleteSession = isCoach && isOwnSession(session);
   const joined = sessionConfirmedForUser(session);
   const requestPending = sessionRequestPending(session);
   const members = enrolledMembers(session);
@@ -1686,6 +1720,7 @@ function sessionDetailView() {
         ${members.length ? members.map((member) => `<div class="list-row"><span>${member}</span><span class="pill gray">member</span></div>`).join("") : `<div class="empty">No enrolled users yet.</div>`}
       </div>
       ${isCoach ? "" : joined ? button("Leave session", "btn-ghost", "leave-session", `data-id="${session.id}"`) : requestPending ? `<button class="btn btn-dark" type="button" disabled>Pending</button>` : button(session.admission === "Approval required" ? "Request to join" : "Join session", "btn-primary", "request-join-session", `data-id="${session.id}"`)}
+      ${canDeleteSession ? `<button class="btn btn-danger" data-action="delete-session" data-id="${session.id}">Delete session</button>` : ""}
       ${button("Back", "btn-ghost", "sessions")}
     </div>
   `);
@@ -2306,6 +2341,9 @@ function handleAction(action, data = {}) {
     "cancel-join-session": () => setState({ confirmJoinSessionId: "" }),
     "confirm-join-session": () => joinSession(data.id),
     "join-session": () => joinSession(data.id),
+    "delete-session": () => setState({ confirmDeleteSessionId: data.id, authError: "", authMessage: "" }),
+    "cancel-delete-session": () => setState({ confirmDeleteSessionId: "" }),
+    "confirm-delete-session": () => deleteSession(data.id),
     "leave-session": () => leaveSession(data.id),
     "admit-user": () => admitUser(data.id, data.name),
     "connect-partner": () => connectPartner(data.name),
@@ -2748,6 +2786,35 @@ async function admitUser(id, name) {
   await updateAdmissionRequestStatus(id, name, "approved");
   await saveRemoteSession(sessions.find((session) => session.id === id));
   setState({ sessions, activeSessionId: id, route: "session-detail" });
+}
+
+async function deleteSession(id) {
+  const session = state.sessions.find((item) => item.id === id);
+  if (!session || state.profile.role !== "coach" || !isOwnSession(session)) {
+    setState({ confirmDeleteSessionId: "", authError: "Only the coach who created this session can delete it.", authMessage: "" });
+    return;
+  }
+
+  const { error } = await deleteRemoteSession(session);
+  if (error) {
+    setState({
+      confirmDeleteSessionId: "",
+      authError: "Could not delete this session yet. Add the Supabase delete policy, then try again.",
+      authMessage: "",
+    });
+    return;
+  }
+
+  const sessions = state.sessions.filter((item) => item.id !== id);
+  setState({
+    sessions,
+    joinedSessions: state.joinedSessions.filter((sessionId) => sessionId !== id),
+    activeSessionId: "",
+    confirmDeleteSessionId: "",
+    route: "sessions",
+    authError: "",
+    authMessage: "Session deleted.",
+  });
 }
 
 function addAnnouncement(id, announcement, subject = "") {

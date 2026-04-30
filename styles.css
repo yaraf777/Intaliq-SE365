@@ -1853,6 +1853,16 @@ button {
   grid-template-columns: 1fr;
 }
 
+.btn-danger {
+  border: 0;
+  background: #cf4d3f;
+  color: #fff;
+}
+
+.btn-danger:hover {
+  background: #b93f33;
+}
+
 .coach-tabs-shell {
   color: #fff;
   background:
