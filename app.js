@@ -16,6 +16,7 @@ const seedState = {
   authError: "",
   authLoading: false,
   confirmSignOut: false,
+  confirmJoinSessionId: "",
   futureFeatureMessage: "",
   pendingEmail: "",
   pendingVerificationRole: "member",
@@ -344,6 +345,7 @@ function saveState() {
     authError: "",
     authMessage: "",
     confirmSignOut: false,
+    confirmJoinSessionId: "",
     futureFeatureMessage: "",
   };
   localStorage.setItem(userStorageKey(state.user?.id), JSON.stringify(persistedState));
@@ -367,7 +369,10 @@ function showTemporaryMessage(message, patch = {}, timeout = 2500) {
 
 function navigate(route) {
   if (messageTimer) clearTimeout(messageTimer);
-  setState({ route, authError: "", authMessage: "" });
+  setState({ route, authError: "", authMessage: "", confirmJoinSessionId: "" });
+  if (state.user && state.profile.role === "coach" && route === "goals") {
+    hydrateSharedSessions().then(render);
+  }
 }
 
 async function formData(form) {
@@ -627,7 +632,7 @@ function render() {
     "session-detail": sessionDetailView,
   };
 
-  app.innerHTML = (views[state.route] || signInView)() + signOutConfirmModal() + futureFeatureModal();
+  app.innerHTML = (views[state.route] || signInView)() + signOutConfirmModal() + joinSessionConfirmModal() + futureFeatureModal();
   bindEvents();
 }
 
@@ -641,6 +646,23 @@ function signOutConfirmModal() {
         <div class="confirm-actions">
           <button class="btn btn-ghost" data-action="cancel-signout">Cancel</button>
           <button class="btn btn-primary" data-action="confirm-signout">Log out</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function joinSessionConfirmModal() {
+  if (!state.confirmJoinSessionId) return "";
+  const session = state.sessions.find((item) => item.id === state.confirmJoinSessionId);
+  return `
+    <div class="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="join-session-title">
+      <div class="confirm-dialog">
+        <h2 id="join-session-title">Request to join?</h2>
+        <p>Are you sure you want to request to join ${session?.title || "this session"}?</p>
+        <div class="confirm-actions">
+          <button class="btn btn-ghost" data-action="cancel-join-session">Cancel</button>
+          <button class="btn btn-primary" data-action="confirm-join-session" data-id="${state.confirmJoinSessionId}">Request Join</button>
         </div>
       </div>
     </div>
@@ -2063,7 +2085,7 @@ function sessionCard(session) {
       ${state.profile.role === "coach" && pending ? `<div class="notice">${pending} admission request${pending === 1 ? "" : "s"} waiting</div>` : ""}
       <div class="grid-2">
         <button class="btn btn-ghost" data-action="session-detail" data-id="${session.id}">Details</button>
-        ${joined ? `<button class="btn btn-dark" data-action="session-detail" data-id="${session.id}">Open</button>` : `<button class="btn btn-primary" data-action="join-session" data-id="${session.id}">Join</button>`}
+        ${joined ? `<button class="btn btn-dark" data-action="session-detail" data-id="${session.id}">Open</button>` : `<button class="btn btn-primary" data-action="request-join-session" data-id="${session.id}">Request Join</button>`}
       </div>
     </article>
   `;
@@ -2197,6 +2219,9 @@ function handleAction(action, data = {}) {
     help: () => setState({ route: "profile-detail", authMessage: "Help: intaliqsupport@gmail.com" }),
     "review-requests": () => navigate("goals"),
     "make-announcement": () => navigate("partners"),
+    "request-join-session": () => setState({ confirmJoinSessionId: data.id, authError: "", authMessage: "" }),
+    "cancel-join-session": () => setState({ confirmJoinSessionId: "" }),
+    "confirm-join-session": () => joinSession(data.id),
     "join-session": () => joinSession(data.id),
     "leave-session": () => leaveSession(data.id),
     "admit-user": () => admitUser(data.id, data.name),
@@ -2587,18 +2612,18 @@ async function updateProfile(data) {
 async function joinSession(id) {
   const selected = state.sessions.find((session) => session.id === id);
   if (state.profile.role === "coach" && isOwnSession(selected)) {
-    showTemporaryMessage("Coaches cannot enroll in their own sessions.", { activeSessionId: id, route: "session-detail" });
+    showTemporaryMessage("Coaches cannot enroll in their own sessions.", { activeSessionId: id, route: "session-detail", confirmJoinSessionId: "" });
     return;
   }
 
   if (selected?.admission === "Approval required" && state.profile.role !== "coach") {
     if (!selected.hostId) {
-      setState({ activeSessionId: id, route: "session-detail", authError: "This session needs to be synced by its coach before requests can be sent.", authMessage: "" });
+      setState({ activeSessionId: id, route: "session-detail", confirmJoinSessionId: "", authError: "This session needs to be synced by its coach before requests can be sent.", authMessage: "" });
       return;
     }
     const { error } = await saveAdmissionRequest(selected);
     if (error) {
-      setState({ activeSessionId: id, route: "session-detail", authError: "Could not send the request yet. Please run the admission requests SQL in Supabase.", authMessage: "" });
+      setState({ activeSessionId: id, route: "session-detail", confirmJoinSessionId: "", authError: "Could not send the request yet. Please run the admission requests SQL in Supabase.", authMessage: "" });
       return;
     }
     const sessions = state.sessions.map((session) => {
@@ -2606,7 +2631,7 @@ async function joinSession(id) {
       const name = state.profile.name || "New user";
       return { ...session, pendingApplicants: [...new Set([...(session.pendingApplicants || []), name])] };
     });
-    showTemporaryMessage("Request sent to the coach.", { sessions, activeSessionId: id, route: "session-detail" });
+    showTemporaryMessage("Request sent to the coach.", { sessions, activeSessionId: id, route: "session-detail", confirmJoinSessionId: "" });
     return;
   }
 
@@ -2616,7 +2641,7 @@ async function joinSession(id) {
     return { ...session, members: [...members, state.profile.name] };
   });
   await saveRemoteSession(sessions.find((session) => session.id === id));
-  setState({ sessions, joinedSessions: [...new Set([...state.joinedSessions, id])], activeSessionId: id, route: "session-detail" });
+  setState({ sessions, joinedSessions: [...new Set([...state.joinedSessions, id])], activeSessionId: id, route: "session-detail", confirmJoinSessionId: "" });
 }
 
 function leaveSession(id) {
