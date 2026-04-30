@@ -50,6 +50,8 @@ const seedState = {
   partners: [],
   partnerRequests: [],
   partnerDirectory: [],
+  partnerDirectoryLoading: false,
+  partnerDirectoryError: "",
   partnerSearch: "",
 };
 
@@ -1557,6 +1559,18 @@ function findPartnersView() {
     const searchable = [partner.name, partner.city, partner.primaryGoal, partner.role].join(" ").toLowerCase();
     return !query || searchable.includes(query);
   });
+  const directoryMessage = state.partnerDirectoryLoading
+    ? `<div class="member-empty friend-empty"><strong>Loading partner accounts...</strong><span>Checking public Intaliq profiles.</span></div>`
+    : state.partnerDirectoryError
+      ? `<div class="member-empty friend-empty"><strong>Could not load partner accounts.</strong><span>${state.partnerDirectoryError}</span></div>`
+      : `
+        <div class="member-empty friend-empty">
+          <strong>No partner accounts found.</strong>
+          <span>
+            ${state.partnerDirectory.length ? "Try a different search." : "When users create public profiles in Supabase, they will appear here."}
+          </span>
+        </div>
+      `;
 
   return withTabs("profile", `
     <div class="topbar">
@@ -1584,14 +1598,7 @@ function findPartnersView() {
           </div>
           <button class="btn btn-primary" data-action="${connected ? "open-friend-chat" : "connect-partner"}" data-name="${partner.name}">${connected ? "Message" : "Connect"}</button>
         </article>
-      `}).join("") : `
-        <div class="member-empty friend-empty">
-          <strong>No partner accounts found.</strong>
-          <span>
-            ${state.partnerDirectory.length ? "Try a different search." : "When users create public profiles in Supabase, they will appear here."}
-          </span>
-        </div>
-      `}
+      `}).join("") : directoryMessage}
     </div>
   `);
 }
@@ -2377,7 +2384,7 @@ function addAnnouncement(id, announcement, subject = "") {
 }
 
 async function openFindPartners() {
-  setState({ route: "find-partners", authMessage: "" });
+  setState({ route: "find-partners", authMessage: "", partnerDirectoryLoading: true, partnerDirectoryError: "" });
   await loadPartnerDirectory();
 }
 
@@ -2394,7 +2401,10 @@ function normalizePartnerProfile(profile) {
 }
 
 async function loadPartnerDirectory() {
-  if (!supabase || !state.user) return;
+  if (!supabase || !state.user) {
+    setState({ partnerDirectoryLoading: false, partnerDirectoryError: "Sign in first so Intaliq can load partner profiles." });
+    return;
+  }
   const { data, error } = await supabase
     .from("profiles")
     .select("*")
@@ -2402,11 +2412,15 @@ async function loadPartnerDirectory() {
     .order("full_name", { ascending: true });
 
   if (error) {
-    setState({ partnerDirectory: [] });
+    setState({
+      partnerDirectory: [],
+      partnerDirectoryLoading: false,
+      partnerDirectoryError: `${error.message}. Check the profiles SELECT policy in Supabase.`,
+    });
     return;
   }
 
-  setState({ partnerDirectory: (data || []).map(normalizePartnerProfile) });
+  setState({ partnerDirectory: (data || []).map(normalizePartnerProfile), partnerDirectoryLoading: false, partnerDirectoryError: "" });
 }
 
 async function syncPublicProfile(profile = state.profile) {
