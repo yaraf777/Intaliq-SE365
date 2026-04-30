@@ -56,7 +56,7 @@ const seedState = {
   partnerSearch: "",
 };
 
-let state = loadState();
+let state = safeLoadState();
 
 const app = document.querySelector("#app");
 const phone = document.querySelector(".phone");
@@ -73,6 +73,23 @@ function updateStatusTime() {
 
 function userStorageKey(userId = "guest") {
   return `${STORAGE_PREFIX}:${userId}`;
+}
+
+function safeLoadState(user = null) {
+  try {
+    return loadState(user);
+  } catch (error) {
+    console.warn("Resetting unreadable Intaliq state:", error);
+    return { ...structuredClone(seedState), user: user ? publicUser(user) : null, profile: profileFromUser(user) || structuredClone(seedState).profile };
+  }
+}
+
+function activeState() {
+  try {
+    return state || {};
+  } catch {
+    return {};
+  }
 }
 
 function loadSharedSessions() {
@@ -104,38 +121,50 @@ function localStoredSessions() {
 }
 
 function saveSharedSessions(sessions = []) {
-  const cleanSessions = mergeSessions(sessions.map((session) => normalizeSessionEnrollment(session)));
-  localStorage.setItem(SHARED_SESSIONS_KEY, JSON.stringify(cleanSessions));
+  try {
+    const cleanSessions = mergeSessions(sessions.map((session) => normalizeSessionEnrollment(session)));
+    localStorage.setItem(SHARED_SESSIONS_KEY, JSON.stringify(cleanSessions));
+  } catch (error) {
+    console.warn("Unable to save shared sessions:", error);
+  }
 }
 
 function mergeSessions(sessions = []) {
   const byId = new Map();
   sessions.filter(Boolean).forEach((session) => {
-    byId.set(session.id, { ...(byId.get(session.id) || {}), ...session });
+    if (typeof session !== "object") return;
+    const id = session.id || session.title;
+    if (!id) return;
+    byId.set(id, { ...(byId.get(id) || {}), ...session, id });
   });
   return [...byId.values()];
 }
 
 function normalizeSessionEnrollment(session, profile = {}) {
+  if (!session || typeof session !== "object") return null;
   return {
     ...session,
     members: enrolledMembers(session, profile),
   };
 }
 
-function isOwnSession(session, profile = state.profile) {
+function isOwnSession(session, profile = null) {
+  const currentState = activeState();
+  const activeProfile = profile || currentState.profile || seedState.profile;
   if (!session) return false;
-  if (session.hostId && state.user?.id) return session.hostId === state.user.id;
-  if (session.hostName && profile.name) return session.hostName === profile.name;
-  return profile.role === "coach";
+  if (session.hostId && currentState.user?.id) return session.hostId === currentState.user.id;
+  if (session.hostName && activeProfile.name) return session.hostName === activeProfile.name;
+  return activeProfile.role === "coach";
 }
 
-function enrolledMembers(session, profile = state.profile) {
+function enrolledMembers(session, profile = null) {
+  const currentState = activeState();
+  const activeProfile = profile || currentState.profile || seedState.profile;
   const blockedNames = new Set(["Host", "A new user", session?.hostName].filter(Boolean));
-  if (profile.role === "coach" && isOwnSession(session, profile)) {
-    blockedNames.add(profile.name);
+  if (activeProfile.role === "coach" && isOwnSession(session, activeProfile)) {
+    blockedNames.add(activeProfile.name);
   }
-  return (session?.members || []).filter((member) => member && !blockedNames.has(member));
+  return (Array.isArray(session?.members) ? session.members : []).filter((member) => member && !blockedNames.has(member));
 }
 
 async function loadRemoteSessions() {
@@ -150,7 +179,7 @@ async function loadRemoteSessions() {
     return [];
   }
 
-  return (data || []).map((row) => normalizeSessionEnrollment({ id: row.id, ...(row.data || {}) }));
+  return (data || []).map((row) => normalizeSessionEnrollment({ id: row.id, ...(row.data || {}) })).filter(Boolean);
 }
 
 async function saveRemoteSession(session) {
@@ -198,7 +227,7 @@ async function syncLocalCoachSessionsToRemote() {
 async function hydrateSharedSessions() {
   const localCoachSessions = await syncLocalCoachSessionsToRemote();
   const remoteSessions = await loadRemoteSessions();
-  const sessions = mergeSessions([...remoteSessions, ...localCoachSessions, ...state.sessions]).map((session) => normalizeSessionEnrollment(session));
+  const sessions = mergeSessions([...remoteSessions, ...localCoachSessions, ...state.sessions]).map((session) => normalizeSessionEnrollment(session)).filter(Boolean);
   state = { ...state, sessions };
   saveSharedSessions(sessions);
   saveState();
@@ -213,15 +242,21 @@ function loadState(user = null) {
       ...structuredClone(seedState),
       user: user ? publicUser(user) : null,
       profile: startingProfile,
-      sessions: loadSharedSessions().map((session) => normalizeSessionEnrollment(session, startingProfile)),
+      sessions: loadSharedSessions().map((session) => normalizeSessionEnrollment(session, startingProfile)).filter(Boolean),
     };
   }
-  const parsed = JSON.parse(saved);
+  let parsed = {};
+  try {
+    parsed = JSON.parse(saved);
+  } catch {
+    parsed = {};
+  }
   const mergedProfile = profile
     ? { ...parsed.profile, ...profile, role: accountRole({ ...parsed.profile, ...profile }) }
     : { ...structuredClone(seedState).profile, ...parsed.profile };
-  const sessions = mergeSessions([...loadSharedSessions(), ...(parsed.sessions || [])])
-    .map((session) => normalizeSessionEnrollment(session, mergedProfile));
+  const sessions = mergeSessions([...loadSharedSessions(), ...(Array.isArray(parsed.sessions) ? parsed.sessions : [])])
+    .map((session) => normalizeSessionEnrollment(session, mergedProfile))
+    .filter(Boolean);
   return {
     ...structuredClone(seedState),
     ...parsed,
