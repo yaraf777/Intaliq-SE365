@@ -155,12 +155,17 @@ async function loadRemoteSessions() {
 
 async function saveRemoteSession(session) {
   if (!supabase || !state.user || !session?.id) return;
+  const sessionForRemote = normalizeSessionEnrollment({
+    ...session,
+    hostId: session.hostId || state.user.id,
+    hostName: session.hostName || state.profile.name || "Coach",
+  });
   const { error } = await supabase
     .from("app_sessions")
     .upsert({
-      id: session.id,
-      host_id: session.hostId || state.user.id,
-      data: session,
+      id: sessionForRemote.id,
+      host_id: sessionForRemote.hostId,
+      data: sessionForRemote,
       updated_at: new Date().toISOString(),
     });
 
@@ -169,10 +174,31 @@ async function saveRemoteSession(session) {
   }
 }
 
+function sessionBelongsToCurrentCoach(session) {
+  if (state.profile.role !== "coach" || !session) return false;
+  if (!session.hostId && !session.hostName) return true;
+  return isOwnSession(session);
+}
+
+async function syncLocalCoachSessionsToRemote() {
+  if (!supabase || !state.user || state.profile.role !== "coach") return [];
+  const localSessions = mergeSessions([...loadSharedSessions(), ...localStoredSessions(), ...(state.sessions || [])]);
+  const coachSessions = localSessions
+    .filter((session) => sessionBelongsToCurrentCoach(session))
+    .map((session) => normalizeSessionEnrollment({
+      ...session,
+      hostId: state.user.id,
+      hostName: session.hostName || state.profile.name || "Coach",
+    }));
+
+  await Promise.all(coachSessions.map((session) => saveRemoteSession(session)));
+  return coachSessions;
+}
+
 async function hydrateSharedSessions() {
+  const localCoachSessions = await syncLocalCoachSessionsToRemote();
   const remoteSessions = await loadRemoteSessions();
-  if (!remoteSessions.length) return;
-  const sessions = mergeSessions([...remoteSessions, ...state.sessions]).map((session) => normalizeSessionEnrollment(session));
+  const sessions = mergeSessions([...remoteSessions, ...localCoachSessions, ...state.sessions]).map((session) => normalizeSessionEnrollment(session));
   state = { ...state, sessions };
   saveSharedSessions(sessions);
   saveState();
