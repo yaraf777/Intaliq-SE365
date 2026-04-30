@@ -62,6 +62,7 @@ const app = document.querySelector("#app");
 const phone = document.querySelector(".phone");
 const statusTime = document.querySelector("#status-time");
 let authReady = false;
+let messageTimer = null;
 
 function updateStatusTime() {
   if (!statusTime) return;
@@ -277,6 +278,8 @@ function saveState() {
   const persistedState = {
     ...state,
     authLoading: false,
+    authError: "",
+    authMessage: "",
     confirmSignOut: false,
     futureFeatureMessage: "",
   };
@@ -289,8 +292,19 @@ function setState(patch) {
   render();
 }
 
+function showTemporaryMessage(message, patch = {}, timeout = 2500) {
+  if (messageTimer) clearTimeout(messageTimer);
+  setState({ ...patch, authError: "", authMessage: message });
+  messageTimer = setTimeout(() => {
+    if (state.authMessage === message) {
+      setState({ authMessage: "" });
+    }
+  }, timeout);
+}
+
 function navigate(route) {
-  setState({ route });
+  if (messageTimer) clearTimeout(messageTimer);
+  setState({ route, authError: "", authMessage: "" });
 }
 
 async function formData(form) {
@@ -2510,7 +2524,7 @@ async function updateProfile(data) {
 function joinSession(id) {
   const selected = state.sessions.find((session) => session.id === id);
   if (state.profile.role === "coach" && isOwnSession(selected)) {
-    setState({ activeSessionId: id, route: "session-detail", authMessage: "Coaches cannot enroll in their own sessions." });
+    showTemporaryMessage("Coaches cannot enroll in their own sessions.", { activeSessionId: id, route: "session-detail" });
     return;
   }
 
@@ -2521,7 +2535,7 @@ function joinSession(id) {
       return { ...session, pendingApplicants: [...new Set([...(session.pendingApplicants || []), name])] };
     });
     saveRemoteSession(sessions.find((session) => session.id === id));
-    setState({ sessions, activeSessionId: id, route: "session-detail", authMessage: "Request sent to the coach." });
+    showTemporaryMessage("Request sent to the coach.", { sessions, activeSessionId: id, route: "session-detail" });
     return;
   }
 
