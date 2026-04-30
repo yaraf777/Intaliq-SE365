@@ -169,6 +169,12 @@ function enrolledMembers(session, profile = null) {
   return (Array.isArray(session?.members) ? session.members : []).filter((member) => member && !blockedNames.has(member));
 }
 
+function sessionRequestPending(session, profile = null) {
+  const activeProfile = profile || activeState().profile || seedState.profile;
+  const activeName = activeProfile.name || "New user";
+  return Boolean(session?.pendingApplicants?.includes(activeName));
+}
+
 async function loadRemoteSessions() {
   if (!supabase || !state.user) return [];
   const { data, error } = await supabase
@@ -1562,15 +1568,22 @@ function sessionDetailView() {
   const session = state.sessions.find((item) => item.id === state.activeSessionId) || state.sessions[0];
   const isCoach = state.profile.role === "coach";
   const joined = state.joinedSessions.includes(session.id);
+  const requestPending = sessionRequestPending(session);
   const members = enrolledMembers(session);
   const pendingApplicants = session.pendingApplicants || [];
   const announcements = session.announcements || [];
   return page(session.title, `${session.date} · ${session.time}`, `
     <div class="stack">
+      ${!isCoach && requestPending && !joined ? `
+        <div class="notice session-request-notice">
+          <strong>Request sent</strong>
+          <span>Waiting for coach approval.</span>
+        </div>
+      ` : ""}
       <div class="card stack">
         <div class="session-head">
           <h3>${session.type}</h3>
-          <span class="pill ${joined || isCoach ? "" : "warn"}">${isCoach ? session.level : joined ? "Joined" : session.admission}</span>
+          <span class="pill ${joined || isCoach || requestPending ? "" : "warn"}">${isCoach ? session.level : joined ? "Joined" : requestPending ? "Pending" : session.admission}</span>
         </div>
         <p class="subtle">${session.notes}</p>
         ${session.accessibility && session.accessibility !== "None" ? `<div class="accessibility-badge">${session.accessibility === "Wheelchair-Friendly" ? "♿ " : ""}${session.accessibility}</div>` : ""}
@@ -1608,7 +1621,7 @@ function sessionDetailView() {
       <div class="card">
         ${members.length ? members.map((member) => `<div class="list-row"><span>${member}</span><span class="pill gray">member</span></div>`).join("") : `<div class="empty">No enrolled users yet.</div>`}
       </div>
-      ${isCoach ? "" : joined ? button("Leave session", "btn-ghost", "leave-session", `data-id="${session.id}"`) : button(session.admission === "Approval required" ? "Request to join" : "Join session", "btn-primary", "join-session", `data-id="${session.id}"`)}
+      ${isCoach ? "" : joined ? button("Leave session", "btn-ghost", "leave-session", `data-id="${session.id}"`) : requestPending ? `<button class="btn btn-dark" type="button" disabled>Pending</button>` : button(session.admission === "Approval required" ? "Request to join" : "Join session", "btn-primary", "request-join-session", `data-id="${session.id}"`)}
       ${button("Back", "btn-ghost", "sessions")}
     </div>
   `);
@@ -2066,6 +2079,7 @@ function goalCard(goal, compact = false) {
 
 function sessionCard(session) {
   const joined = state.joinedSessions.includes(session.id);
+  const requestPending = sessionRequestPending(session);
   const pending = session.pendingApplicants?.length || 0;
   const accessibility = session.accessibility && session.accessibility !== "None" ? session.accessibility : "";
   const members = enrolledMembers(session);
@@ -2085,7 +2099,11 @@ function sessionCard(session) {
       ${state.profile.role === "coach" && pending ? `<div class="notice">${pending} admission request${pending === 1 ? "" : "s"} waiting</div>` : ""}
       <div class="grid-2">
         <button class="btn btn-ghost" data-action="session-detail" data-id="${session.id}">Details</button>
-        ${joined ? `<button class="btn btn-dark" data-action="session-detail" data-id="${session.id}">Open</button>` : `<button class="btn btn-primary" data-action="request-join-session" data-id="${session.id}">Request Join</button>`}
+        ${joined
+          ? `<button class="btn btn-dark" data-action="session-detail" data-id="${session.id}">Open</button>`
+          : requestPending
+            ? `<button class="btn btn-dark" data-action="session-detail" data-id="${session.id}">Pending</button>`
+            : `<button class="btn btn-primary" data-action="request-join-session" data-id="${session.id}">Request Join</button>`}
       </div>
     </article>
   `;
@@ -2631,7 +2649,7 @@ async function joinSession(id) {
       const name = state.profile.name || "New user";
       return { ...session, pendingApplicants: [...new Set([...(session.pendingApplicants || []), name])] };
     });
-    showTemporaryMessage("Request sent to the coach.", { sessions, activeSessionId: id, route: "session-detail", confirmJoinSessionId: "" });
+    setState({ sessions, activeSessionId: id, route: "session-detail", confirmJoinSessionId: "", authError: "", authMessage: "" });
     return;
   }
 
