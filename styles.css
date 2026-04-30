@@ -2318,6 +2318,11 @@ button {
   font-size: 16px;
 }
 
+.member-tabs-shell .session-card .session-head h3 {
+  color: var(--accent-dark);
+  font-weight: 900;
+}
+
 .pill {
   border-radius: 99px;
   padding: 4px 8px;
