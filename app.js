@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 
 const STORAGE_PREFIX = "intaliq-app-state-v2";
+const SHARED_SESSIONS_KEY = `${STORAGE_PREFIX}:shared-sessions`;
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const productionAppUrl = "https://intaliq-se-365.vercel.app";
@@ -74,6 +75,27 @@ function userStorageKey(userId = "guest") {
   return `${STORAGE_PREFIX}:${userId}`;
 }
 
+function loadSharedSessions() {
+  try {
+    return JSON.parse(localStorage.getItem(SHARED_SESSIONS_KEY) || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function saveSharedSessions(sessions = []) {
+  const cleanSessions = mergeSessions(sessions.map((session) => normalizeSessionEnrollment(session)));
+  localStorage.setItem(SHARED_SESSIONS_KEY, JSON.stringify(cleanSessions));
+}
+
+function mergeSessions(sessions = []) {
+  const byId = new Map();
+  sessions.filter(Boolean).forEach((session) => {
+    byId.set(session.id, { ...(byId.get(session.id) || {}), ...session });
+  });
+  return [...byId.values()];
+}
+
 function normalizeSessionEnrollment(session, profile = {}) {
   return {
     ...session,
@@ -100,15 +122,20 @@ function loadState(user = null) {
   const saved = localStorage.getItem(userStorageKey(user?.id));
   const profile = profileFromUser(user);
   if (!saved) {
-    return { ...structuredClone(seedState), user: user ? publicUser(user) : null, profile: profile || structuredClone(seedState).profile };
+    const startingProfile = profile || structuredClone(seedState).profile;
+    return {
+      ...structuredClone(seedState),
+      user: user ? publicUser(user) : null,
+      profile: startingProfile,
+      sessions: loadSharedSessions().map((session) => normalizeSessionEnrollment(session, startingProfile)),
+    };
   }
   const parsed = JSON.parse(saved);
   const mergedProfile = profile
     ? { ...parsed.profile, ...profile, role: accountRole({ ...parsed.profile, ...profile }) }
     : { ...structuredClone(seedState).profile, ...parsed.profile };
-  const sessions = (parsed.sessions || []).map((session) => (
-    mergedProfile.role === "coach" ? normalizeSessionEnrollment(session, mergedProfile) : session
-  ));
+  const sessions = mergeSessions([...loadSharedSessions(), ...(parsed.sessions || [])])
+    .map((session) => normalizeSessionEnrollment(session, mergedProfile));
   return {
     ...structuredClone(seedState),
     ...parsed,
@@ -123,6 +150,9 @@ function loadState(user = null) {
 }
 
 function saveState() {
+  if (state.user) {
+    saveSharedSessions(state.sessions || []);
+  }
   const persistedState = {
     ...state,
     authLoading: false,
@@ -225,7 +255,7 @@ function profileFromPublicProfile(row, user = state.user) {
 
 function routeForProfile(profile = state.profile) {
   const isCoach = profile.role === "coach";
-  if (isCoach) return state.sessions.length ? "home" : "onboarding";
+  if (isCoach) return state.sessions.some((session) => isOwnSession(session, profile)) ? "home" : "onboarding";
   return state.goals.length ? "home" : "onboarding";
 }
 
@@ -839,10 +869,11 @@ function statsPeriodTabs(activePeriod) {
 
 function coachHomeView() {
   const displayName = state.profile.name || "Coach";
-  const upcoming = state.sessions[0];
-  const pendingCount = state.sessions.reduce((total, session) => total + (session.pendingApplicants?.length || 0), 0);
-  const totalMembers = state.sessions.reduce((total, session) => total + enrolledMembers(session).length, 0);
-  const activeSessions = state.sessions.filter((session) => session.date !== "Completed").length;
+  const ownSessions = state.sessions.filter((session) => isOwnSession(session));
+  const upcoming = ownSessions[0];
+  const pendingCount = ownSessions.reduce((total, session) => total + (session.pendingApplicants?.length || 0), 0);
+  const totalMembers = ownSessions.reduce((total, session) => total + enrolledMembers(session).length, 0);
+  const activeSessions = ownSessions.filter((session) => session.date !== "Completed").length;
   return withTabs("home", `
     <div class="coach-dashboard">
       <header class="coach-dashboard-head">
@@ -857,7 +888,7 @@ function coachHomeView() {
         ${coachStat("Active Sessions", activeSessions, "")}
         ${coachStat("Total Members", Math.max(totalMembers, state.partners.length), "")}
         ${coachStat("Pending Requests", pendingCount, "")}
-        ${coachStat("Total Sessions", state.sessions.length, "")}
+        ${coachStat("Total Sessions", ownSessions.length, "")}
       </section>
 
       <section class="coach-section">
@@ -1192,18 +1223,19 @@ function activityFormView() {
 
 function sessionsView() {
   if (state.profile.role === "coach") {
+    const ownSessions = state.sessions.filter((session) => isOwnSession(session));
     return withTabs("sessions", `
       <div class="topbar">
         <h1>My Sessions</h1>
         ${button("+ Session", "btn-primary", "new-session")}
       </div>
       <div class="stack">
-        ${state.sessions.length ? state.sessions.map((session) => sessionCard(session)).join("") : `<div class="empty">No sessions yet. Create your first coaching session.</div>`}
+        ${ownSessions.length ? ownSessions.map((session) => sessionCard(session)).join("") : `<div class="empty">No sessions yet. Create your first coaching session.</div>`}
       </div>
     `);
   }
 
-  const offeredSessions = state.sessions.filter((session) => !state.joinedSessions.includes(session.id));
+  const offeredSessions = state.sessions.filter((session) => !state.joinedSessions.includes(session.id) && !isOwnSession(session));
   return withTabs("sessions", `
     <div class="member-page-topbar requests-head">
       <h1>Sessions</h1>
@@ -1537,7 +1569,7 @@ function aiChatView() {
 
 function partnersView() {
   if (state.profile.role === "coach") {
-    const sessionOptions = state.sessions.map((session) => `
+    const sessionOptions = state.sessions.filter((session) => isOwnSession(session)).map((session) => `
       <option value="${session.id}">${session.title} · ${session.date} at ${session.time}</option>
     `).join("");
 
