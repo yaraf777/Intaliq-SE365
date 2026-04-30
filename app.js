@@ -74,6 +74,14 @@ function userStorageKey(userId = "guest") {
   return `${STORAGE_PREFIX}:${userId}`;
 }
 
+function normalizeSessionEnrollment(session, profile = {}) {
+  const hostNames = new Set(["Host", profile.name].filter(Boolean));
+  return {
+    ...session,
+    members: (session.members || []).filter((member) => member && !hostNames.has(member)),
+  };
+}
+
 function loadState(user = null) {
   const saved = localStorage.getItem(userStorageKey(user?.id));
   const profile = profileFromUser(user);
@@ -84,11 +92,16 @@ function loadState(user = null) {
   const mergedProfile = profile
     ? { ...parsed.profile, ...profile, role: accountRole({ ...parsed.profile, ...profile }) }
     : { ...structuredClone(seedState).profile, ...parsed.profile };
+  const sessions = (parsed.sessions || []).map((session) => (
+    mergedProfile.role === "coach" ? normalizeSessionEnrollment(session, mergedProfile) : session
+  ));
   return {
     ...structuredClone(seedState),
     ...parsed,
     user: user ? publicUser(user) : null,
     profile: mergedProfile,
+    sessions,
+    joinedSessions: mergedProfile.role === "coach" ? [] : (parsed.joinedSessions || []),
     authLoading: false,
     confirmSignOut: false,
     futureFeatureMessage: "",
@@ -1867,7 +1880,7 @@ function makeSession(data) {
     time: data.time,
     capacity: Number(data.capacity),
     location: data.location || "",
-    members: [state.profile.name || "Host"],
+    members: [],
     pendingApplicants: [],
     announcements: [],
     notes: data.notes || "Focused workout session.",
@@ -1972,7 +1985,7 @@ async function handleForm(type, data) {
       const session = makeSession(data);
       setState({
         sessions: [session, ...state.sessions.filter((item) => item.id !== session.id)],
-        joinedSessions: [...new Set([session.id, ...state.joinedSessions])],
+        joinedSessions: state.joinedSessions,
         activeSessionId: session.id,
         route: "home",
         authError: "",
@@ -2004,7 +2017,7 @@ async function handleForm(type, data) {
     const session = makeSession(data);
     setState({
       sessions: [session, ...state.sessions.filter((item) => item.id !== session.id)],
-      joinedSessions: [...new Set([session.id, ...state.joinedSessions])],
+      joinedSessions: state.joinedSessions,
       activeSessionId: session.id,
       route: "session-detail",
       authError: "",
