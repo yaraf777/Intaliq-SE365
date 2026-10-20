@@ -7,6 +7,7 @@ const SHARED_SESSIONS_KEY = `${STORAGE_PREFIX}:shared-sessions`;
 const THEME_KEY = "intaliq-theme";
 const LAST_ACTIVITY_KEY = `${STORAGE_PREFIX}:last-activity`;
 const INACTIVITY_TIMEOUT_MS = 45 * 60 * 1000;
+const WALKTHROUGH_KEY = `${STORAGE_PREFIX}:walkthrough-complete`;
 const SUPPORT_EMAIL = "intaliqsupport@gmail.com";
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -39,6 +40,9 @@ const seedState = {
   statsPeriod: "Day",
   historyTab: "sessions",
   eventFilter: "All",
+  walkthroughComplete: false,
+  walkthroughDismissed: false,
+  walkthroughHelp: false,
   user: null,
   profile: {
     name: "",
@@ -545,6 +549,7 @@ function loadState(user = null) {
       ...structuredClone(seedState),
       user: user ? publicUser(user) : null,
       profile: startingProfile,
+      walkthroughComplete: (() => { try { return localStorage.getItem(WALKTHROUGH_KEY) === "true"; } catch { return false; } })(),
       sessions: loadSharedSessions().map((session) => normalizeSessionEnrollment(session, startingProfile)).filter(Boolean),
     };
   }
@@ -564,6 +569,7 @@ function loadState(user = null) {
     ...structuredClone(seedState),
     ...parsed,
     user: user ? publicUser(user) : null,
+    walkthroughComplete: (() => { try { return localStorage.getItem(WALKTHROUGH_KEY) === "true"; } catch { return Boolean(parsed.walkthroughComplete); } })(),
     profile: mergedProfile,
     sessions,
     joinedSessions: mergedProfile.role === "coach" ? [] : (parsed.joinedSessions || []),
@@ -609,7 +615,7 @@ function showTemporaryMessage(message, patch = {}, timeout = 2500) {
 
 function navigate(route) {
   if (messageTimer) clearTimeout(messageTimer);
-  setState({ route, authError: "", authMessage: "", confirmJoinSessionId: "", confirmDeleteSessionId: "", profileDraft: null });
+  setState({ route, walkthroughDismissed: false, walkthroughHelp: false, authError: "", authMessage: "", confirmJoinSessionId: "", confirmDeleteSessionId: "", profileDraft: null });
   if (state.user && state.profile.role === "coach" && route === "goals") {
     hydrateSharedSessions().then(render);
   }
@@ -863,8 +869,8 @@ function activityTypePicker(value = "Running") {
     { value: "Hiking", label: "Hike", icon: "Hiking" },
   ];
   return `
-    <fieldset class="activity-type-field">
-      <legend>Activity type</legend>
+    <fieldset class="activity-type-field" data-walkthrough-target="activity-type">
+      <legend>1. Choose an activity type</legend>
       <div class="activity-type-options">
         ${options.map((activity) => `
           <label class="activity-type-option">
@@ -934,9 +940,33 @@ function render() {
     admin: adminView,
   };
 
-  app.innerHTML = (views[state.route] || landingView)() + signOutConfirmModal() + joinSessionConfirmModal() + deleteSessionConfirmModal() + futureFeatureModal() + adminConfirmModal();
+  app.innerHTML = (views[state.route] || landingView)() + signOutConfirmModal() + joinSessionConfirmModal() + deleteSessionConfirmModal() + futureFeatureModal() + adminConfirmModal() + walkthroughView();
   localize(app);
   bindEvents();
+}
+
+function walkthroughSteps() {
+  const isCoach = state.profile.role === "coach";
+  const guides = {
+    home: ["Your home", isCoach ? "See your sessions, member requests, and coaching updates here." : "See your goals, recent activity, and useful shortcuts here."],
+    onboarding: [isCoach ? "Create a session" : "Set your first goal", isCoach ? "Choose a workout type, set a time and place, then publish your session for members." : "Choose Run, Bike, or Hike first. Then name your goal, pick a due date, and set a distance target."],
+    "goal-form": ["Create a goal", "Choose Run, Bike, or Hike at the top. Add a distance target and due date to track progress."],
+    "activity-form": ["Log a workout", "Pick the activity type, enter when you worked out, then add distance and duration."],
+    activities: ["Your activities", "Your saved workouts and total distance show here. Tap + Log to record another workout."],
+    goals: ["Your goals", isCoach ? "Review requests from people who want to join your sessions." : "Your goals appear here. Open a goal to update its completed distance."],
+    sessions: ["Sessions", isCoach ? "Create and manage your coaching sessions here." : "Browse coach led workouts, then request a spot in one that fits."],
+    profile: ["Your profile", "Update your account details, privacy settings, and preferences here."],
+  };
+  return guides[state.route] || ["Welcome to Intaliq", "Use the tabs at the bottom to move between Home, Activities, Sessions, Goals, and Profile."];
+}
+
+function walkthroughView() {
+  if (!state.user || state.walkthroughComplete || state.walkthroughDismissed) return "";
+  const [title, detail] = walkthroughSteps();
+  return `<aside class="walkthrough-card" role="region" aria-label="First time walkthrough">
+    <div class="walkthrough-copy"><span class="walkthrough-kicker">QUICK TOUR · ${escapeHtml(state.route.replaceAll("-", " ").toUpperCase())}</span><strong>${escapeHtml(title)}</strong><p>${escapeHtml(detail)}</p></div>
+    <div class="walkthrough-actions"><button type="button" data-action="walkthrough-help">${state.walkthroughHelp ? "Got it" : "Explain this screen"}</button><button type="button" data-action="walkthrough-done">${state.walkthroughHelp ? "Next screen" : "Done"}</button></div>
+  </aside>`;
 }
 
 function signOutConfirmModal() {
@@ -1220,7 +1250,12 @@ function onboardingView() {
     ${message}
     ${error}
     <form class="stack" data-form="onboarding">
-      ${isCoach ? sessionFields() : goalFields({ title: "", category: "Strength", due: "This week", progress: 0, checkpoints: ["", "", "", ""] })}
+      ${isCoach ? sessionFields() : `
+        ${activityTypePicker("Running")}
+        <label class="field"><span>Goal name</span><input class="input" name="title" placeholder="e.g., Run 5 km without stopping" maxlength="60" required /></label>
+        <label class="field"><span>Due date</span><input class="input" name="due" type="date" min="${todayDateValue()}" max="${dateYearsAhead(5)}" required /></label>
+        <label class="field"><span>Target distance (km)</span><input class="input" name="targetDistance" type="number" min="0.1" max="5000" step="0.1" placeholder="5" required /></label>
+      `}
       <button class="btn btn-primary" type="submit">${isCoach ? "Create session" : "Save goal"}</button>
       ${button("Skip for now", "btn-ghost", "skip-onboarding")}
     </form>
@@ -3715,6 +3750,14 @@ function handleAction(action, data = {}) {
     "landing-coach": () => setState({ route: "signin", authMode: "signup", profile: { ...state.profile, role: "coach" }, authLoading: false, authError: "", authMessage: "" }),
     "resend-email-code": () => resendEmailCode(),
     "skip-onboarding": () => navigate("home"),
+    "walkthrough-help": () => setState({ walkthroughHelp: true }),
+    "walkthrough-done": () => {
+      const complete = Boolean(state.walkthroughHelp);
+      if (complete) {
+        try { localStorage.setItem(WALKTHROUGH_KEY, "true"); } catch { /* Saved in app state below. */ }
+      }
+      setState({ walkthroughComplete: complete, walkthroughDismissed: !complete, walkthroughHelp: false });
+    },
     back: () => navigate(state.user ? "home" : "signin"),
     goals: () => navigate("goals"),
     stats: () => navigate("stats"),

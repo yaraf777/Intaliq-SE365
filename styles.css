@@ -1704,6 +1704,30 @@ button {
   font-weight: 800;
 }
 
+.walkthrough-card {
+  position: fixed;
+  z-index: 40;
+  left: max(16px, env(safe-area-inset-left));
+  right: max(16px, env(safe-area-inset-right));
+  bottom: calc(82px + env(safe-area-inset-bottom));
+  max-width: 620px;
+  margin: 0 auto;
+  padding: 16px;
+  border: 1px solid var(--lime-line, #c7ff4f);
+  border-radius: 18px;
+  background: #171916;
+  color: #fff;
+  box-shadow: 0 12px 40px rgba(0,0,0,.45);
+}
+
+.walkthrough-copy { display: grid; gap: 5px; }
+.walkthrough-kicker { color: var(--lime-text, #c7ff4f); font-size: 10px; font-weight: 900; letter-spacing: .08em; }
+.walkthrough-copy strong { font-size: 17px; }
+.walkthrough-copy p { margin: 0; color: rgba(255,255,255,.78); font-size: 14px; line-height: 1.45; }
+.walkthrough-actions { display: flex; justify-content: space-between; gap: 12px; margin-top: 12px; }
+.walkthrough-actions button { border: 0; background: transparent; color: var(--lime-text, #c7ff4f); font: inherit; font-weight: 800; padding: 7px 2px; }
+.walkthrough-actions button:last-child { padding-inline: 14px; border-radius: 10px; background: var(--lime, #c7ff4f); color: #12150d; }
+
 .activity-type-options {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
