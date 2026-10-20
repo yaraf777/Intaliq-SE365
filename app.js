@@ -5,6 +5,8 @@ import { birthdateLimits, birthdateProblem, passwordProblem, validateForm } from
 const STORAGE_PREFIX = "intaliq-app-state-v2";
 const SHARED_SESSIONS_KEY = `${STORAGE_PREFIX}:shared-sessions`;
 const THEME_KEY = "intaliq-theme";
+const LAST_ACTIVITY_KEY = `${STORAGE_PREFIX}:last-activity`;
+const INACTIVITY_TIMEOUT_MS = 45 * 60 * 1000;
 const SUPPORT_EMAIL = "intaliqsupport@gmail.com";
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -13,6 +15,9 @@ const authRedirectUrl = import.meta.env.VITE_AUTH_REDIRECT_URL || productionAppU
 const aiWorkerUrl = import.meta.env.VITE_AI_WORKER_URL || "https://intaliq.shoug-alomran.workers.dev";
 const hasSupabaseConfig = Boolean(supabaseUrl && supabaseAnonKey);
 const supabase = hasSupabaseConfig ? createClient(supabaseUrl, supabaseAnonKey) : null;
+let lastActivityAt = 0;
+let inactivityTimer = null;
+let inactivitySignOutPending = false;
 
 const seedState = {
   route: "landing",
@@ -165,6 +170,83 @@ function updateStatusTime() {
 
 function userStorageKey(userId = "guest") {
   return `${STORAGE_PREFIX}:${userId}`;
+}
+
+function readLastActivity() {
+  try {
+    const value = Number(localStorage.getItem(LAST_ACTIVITY_KEY));
+    return Number.isFinite(value) ? value : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function recordActivity(force = false) {
+  if (!state?.user && !force) return;
+  const now = Date.now();
+  if (!force && now - lastActivityAt < 1000) return;
+  lastActivityAt = now;
+  try {
+    localStorage.setItem(LAST_ACTIVITY_KEY, String(now));
+  } catch {
+    // The in-memory timestamp still protects this tab if storage is unavailable.
+  }
+  scheduleInactivityCheck();
+}
+
+function sessionExpiredByInactivity() {
+  const lastActivity = Math.max(lastActivityAt, readLastActivity());
+  return lastActivity > 0 && Date.now() - lastActivity >= INACTIVITY_TIMEOUT_MS;
+}
+
+function scheduleInactivityCheck() {
+  clearTimeout(inactivityTimer);
+  if (!state?.user) return;
+  const lastActivity = Math.max(lastActivityAt, readLastActivity()) || Date.now();
+  const remaining = Math.max(0, lastActivity + INACTIVITY_TIMEOUT_MS - Date.now());
+  inactivityTimer = setTimeout(enforceInactivityTimeout, remaining + 25);
+}
+
+async function enforceInactivityTimeout() {
+  if (!state?.user) return;
+  const latestActivity = Math.max(lastActivityAt, readLastActivity());
+  if (Date.now() - latestActivity < INACTIVITY_TIMEOUT_MS) {
+    scheduleInactivityCheck();
+    return;
+  }
+  inactivitySignOutPending = true;
+  await supabase?.auth.signOut({ scope: "local" });
+  try {
+    localStorage.removeItem(LAST_ACTIVITY_KEY);
+  } catch {
+    // Ignore unavailable storage; the auth session has still been cleared.
+  }
+  setState({
+    user: null,
+    route: "signin",
+    authMode: "signin",
+    authLoading: false,
+    authError: "You were signed out after 45 minutes of inactivity. Please log in again.",
+    authMessage: "",
+  });
+  inactivitySignOutPending = false;
+}
+
+function startInactivityTracking() {
+  const activityEvents = ["pointerdown", "keydown", "scroll", "touchstart", "click"];
+  activityEvents.forEach((type) => document.addEventListener(type, () => recordActivity(), { passive: true }));
+  window.addEventListener("storage", (event) => {
+    if (event.key === LAST_ACTIVITY_KEY) {
+      lastActivityAt = Math.max(lastActivityAt, Number(event.newValue) || 0);
+      scheduleInactivityCheck();
+    }
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && state?.user) {
+      if (sessionExpiredByInactivity()) void enforceInactivityTimeout();
+      else scheduleInactivityCheck();
+    }
+  });
 }
 
 function safeLoadState(user = null) {
@@ -3882,22 +3964,25 @@ async function handleAuth(data) {
   if (!isSignup) {
     const verifiedUser = response.data.user;
     const verifiedProfile = await profileWithDatabaseRole(verifiedUser);
-    // Local scope: a global sign-out would end this account's sessions on every other device too.
-    await supabase.auth.signOut({ scope: "local" });
     if (verifiedProfile?.isSuspended) {
+      await supabase.auth.signOut({ scope: "local" });
       setState({ authLoading: false, authError: SUSPENDED_MESSAGE, authMessage: "" });
       return;
     }
-    await sendEmailOtp(
-      emailResult.email,
-      {
-        role: verifiedProfile?.role || "member",
-        name: verifiedProfile?.name || emailResult.email.split("@")[0],
-        fitnessLevel: verifiedProfile?.fitnessLevel || "Beginner",
-        primaryGoal: verifiedProfile?.primaryGoal || "",
-        specialty: verifiedProfile?.specialty || "",
-      },
-    );
+    const signedInUser = response.data.session?.user || verifiedUser;
+    const profile = { ...loadState(signedInUser).profile, ...verifiedProfile };
+    recordActivity(true);
+    state = loadState(signedInUser);
+    setState({
+      user: publicUser(signedInUser),
+      profile,
+      route: routeForProfile(profile),
+      confirmSignOut: false,
+      authLoading: false,
+      authError: "",
+      authMessage: "",
+    });
+    await hydrateSharedSessions();
     return;
   }
 
@@ -4059,6 +4144,12 @@ async function verifyEmailCode(data) {
 
 async function signOut() {
   if (supabase) await supabase.auth.signOut({ scope: "local" });
+  clearTimeout(inactivityTimer);
+  try {
+    localStorage.removeItem(LAST_ACTIVITY_KEY);
+  } catch {
+    // Ignore unavailable storage.
+  }
   setState({ user: null, route: "signin", authMode: "signin", confirmSignOut: false, authError: "", authMessage: "Signed out." });
 }
 
@@ -4088,12 +4179,19 @@ const SESSION_EXPIRED_MESSAGE = "Your sign-in has expired. Log in again, then sa
 
 async function saveAccount(profile, extraUpdate = {}) {
   if (!supabase || !state.user) return "";
-  const { data: sessionData } = await supabase.auth.getSession();
-  if (!sessionData.session) return SESSION_EXPIRED_MESSAGE;
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError) return sessionError.message;
+  let session = sessionData.session;
+  if (!session || session.user?.id !== state.user.id) return SESSION_EXPIRED_MESSAGE;
+  if (session.expires_at && session.expires_at * 1000 <= Date.now() + 60_000) {
+    const { data: refreshed, error } = await supabase.auth.refreshSession();
+    if (error || !refreshed.session) return SESSION_EXPIRED_MESSAGE;
+    session = refreshed.session;
+  }
   const profileError = await syncPublicProfile(profile);
   if (profileError) return usernameSaveError(profileError);
   const { error } = await supabase.auth.updateUser({ ...extraUpdate, data: profileMetadata(profile) });
-  if (error?.name === "AuthSessionMissingError") return SESSION_EXPIRED_MESSAGE;
+  if (error?.name === "AuthSessionMissingError" || error?.status === 401) return SESSION_EXPIRED_MESSAGE;
   return error ? error.message : "";
 }
 
@@ -4486,9 +4584,17 @@ async function initAuth() {
 
   const { data, error } = await supabase.auth.getSession();
   const sessionUser = data.session?.user || null;
-  const hydratedProfile = await profileWithDatabaseRole(sessionUser);
-  const suspended = Boolean(sessionUser && hydratedProfile?.isSuspended);
-  const user = suspended ? null : sessionUser;
+  if (sessionUser && sessionExpiredByInactivity()) {
+    inactivitySignOutPending = true;
+    await supabase.auth.signOut({ scope: "local" });
+  }
+  const validSessionUser = sessionExpiredByInactivity() ? null : sessionUser;
+  if (!validSessionUser && inactivitySignOutPending) {
+    try { localStorage.removeItem(LAST_ACTIVITY_KEY); } catch { /* Ignore unavailable storage. */ }
+  }
+  const hydratedProfile = await profileWithDatabaseRole(validSessionUser);
+  const suspended = Boolean(validSessionUser && hydratedProfile?.isSuspended);
+  const user = suspended ? null : validSessionUser;
   state = loadState(user);
   state.confirmSignOut = false;
   state.futureFeatureMessage = "";
@@ -4500,7 +4606,12 @@ async function initAuth() {
   } else if (!user) {
     state.route = "landing";
     state.authMode = "signin";
+    if (inactivitySignOutPending) {
+      inactivitySignOutPending = false;
+      state.authError = "You were signed out after 45 minutes of inactivity. Please log in again.";
+    }
   } else {
+    recordActivity(false);
     state.profile = { ...state.profile, ...hydratedProfile };
     await hydrateSharedSessions();
     if (state.route === "signin" || !routeAllowedForRole(state.route, state.profile.role)) {
@@ -4519,13 +4630,22 @@ async function initAuth() {
   supabase.auth.onAuthStateChange((event, session) => {
     setTimeout(() => handleAuthChange(event, session), 0);
   });
+  startInactivityTracking();
 }
 
 async function handleAuthChange(event, session) {
   const userFromSession = session?.user || null;
   // Profile saves and token refreshes are already reflected in state; reloading
   // here would race the save and drop its confirmation message.
-  if ((event === "USER_UPDATED" || event === "TOKEN_REFRESHED") && userFromSession?.id === state.user?.id) return;
+  if ((event === "USER_UPDATED" || event === "TOKEN_REFRESHED") && userFromSession?.id === state.user?.id) {
+    scheduleInactivityCheck();
+    return;
+  }
+  if (userFromSession && sessionExpiredByInactivity()) {
+    inactivitySignOutPending = true;
+    setTimeout(() => supabase.auth.signOut({ scope: "local" }), 0);
+    return;
+  }
   const nextProfile = await profileWithDatabaseRole(userFromSession);
   if (userFromSession && nextProfile?.isSuspended) {
     signOutSuspendedUser();
@@ -4536,10 +4656,12 @@ async function handleAuthChange(event, session) {
   state.confirmSignOut = false;
   state.futureFeatureMessage = "";
   if (userFromSession) {
+    recordActivity(event === "SIGNED_IN" || event === "INITIAL_SESSION");
     state.profile = { ...state.profile, ...nextProfile };
     await hydrateSharedSessions();
     state.route = state.route === "signin" || !routeAllowedForRole(state.route, state.profile.role) ? routeForProfile(state.profile) : state.route;
   } else {
+    clearTimeout(inactivityTimer);
     // Keep visitors where they are in the sign-in flow instead of forcing the login page.
     state.route = ["landing", "signin", "verify"].includes(previousRoute) ? previousRoute : "landing";
     if (suspendedSignOutPending) {
@@ -4547,6 +4669,12 @@ async function handleAuthChange(event, session) {
       state.route = "signin";
       state.authMode = "signin";
       state.authError = SUSPENDED_MESSAGE;
+    }
+    if (inactivitySignOutPending) {
+      inactivitySignOutPending = false;
+      state.route = "signin";
+      state.authMode = "signin";
+      state.authError = "You were signed out after 45 minutes of inactivity. Please log in again.";
     }
   }
   render();
