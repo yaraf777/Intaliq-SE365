@@ -2,6 +2,8 @@ import { createClient } from "@supabase/supabase-js";
 
 const STORAGE_PREFIX = "intaliq-app-state-v2";
 const SHARED_SESSIONS_KEY = `${STORAGE_PREFIX}:shared-sessions`;
+const THEME_KEY = "intaliq-theme";
+const SUPPORT_EMAIL = "intaliqsupport@gmail.com";
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const productionAppUrl = "https://intaliq-se-365.vercel.app";
@@ -10,7 +12,7 @@ const hasSupabaseConfig = Boolean(supabaseUrl && supabaseAnonKey);
 const supabase = hasSupabaseConfig ? createClient(supabaseUrl, supabaseAnonKey) : null;
 
 const seedState = {
-  route: "signin",
+  route: "landing",
   authMode: "signin",
   authMessage: "",
   authError: "",
@@ -65,6 +67,32 @@ const phone = document.querySelector(".phone");
 const statusTime = document.querySelector("#status-time");
 let authReady = false;
 let messageTimer = null;
+
+// Theme is a device preference, so it lives outside the per-user app state.
+// index.html applies the saved value before first paint to avoid a flash.
+function currentTheme() {
+  return document.documentElement.dataset.theme === "light" ? "light" : "dark";
+}
+
+function toggleTheme() {
+  const theme = currentTheme() === "light" ? "dark" : "light";
+  document.documentElement.dataset.theme = theme;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "light" ? "#f7f8f3" : "#050505");
+  try {
+    localStorage.setItem(THEME_KEY, theme);
+  } catch {
+    // Theme still applies for this visit if storage is unavailable.
+  }
+  render();
+}
+
+function themeToggleButton() {
+  const isLight = currentTheme() === "light";
+  const icon = isLight
+    ? `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" fill="currentColor"/></svg>`
+    : `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.5" fill="currentColor"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
+  return `<button type="button" class="theme-toggle" data-action="toggle-theme" aria-label="Switch to ${isLight ? "dark" : "light"} mode">${icon}<span>${isLight ? "Dark" : "Light"}</span></button>`;
+}
 
 function updateStatusTime() {
   if (!statusTime) return;
@@ -650,7 +678,7 @@ function render() {
 
   const protectedRoutes = ["home", "events", "activities", "stats", "history", "requests", "goals", "sessions", "partners", "find-partners", "friend-chat", "profile", "profile-detail", "profile-edit", "ai-chat", "goal-form", "goal-detail", "activity-form", "session-form", "session-detail"];
   if (protectedRoutes.includes(state.route) && !state.user) {
-    state.route = "signin";
+    state.route = "landing";
   }
 
   if (state.user && !routeAllowedForRole(state.route, state.profile.role)) {
@@ -658,6 +686,7 @@ function render() {
   }
 
   const views = {
+    landing: landingView,
     signin: signInView,
     verify: verifyView,
     onboarding: onboardingView,
@@ -683,7 +712,7 @@ function render() {
     "session-detail": sessionDetailView,
   };
 
-  app.innerHTML = (views[state.route] || signInView)() + signOutConfirmModal() + joinSessionConfirmModal() + deleteSessionConfirmModal() + futureFeatureModal();
+  app.innerHTML = (views[state.route] || landingView)() + signOutConfirmModal() + joinSessionConfirmModal() + deleteSessionConfirmModal() + futureFeatureModal();
   bindEvents();
 }
 
@@ -752,6 +781,107 @@ function futureFeatureModal() {
   `;
 }
 
+function landingView() {
+  const features = [
+    ["goals", "Set goals", "Break a big goal into checkpoints and watch your progress add up."],
+    ["sessions", "Join sessions", "Find coach-led workouts and request a spot in a tap."],
+    ["activities", "Log activities", "Track distance, active days and calories week by week."],
+    ["announce", "Stay in the loop", "Get session updates and announcements from your coaches."],
+  ];
+
+  return `
+    <div class="landing-screen">
+      <nav class="landing-nav" aria-label="Intaliq">
+        <span class="landing-brand"><img src="/favicon.svg" alt="" />Intaliq</span>
+        <div class="landing-nav-actions">
+          ${themeToggleButton()}
+          <button type="button" class="landing-login" data-action="landing-signin">Log in</button>
+        </div>
+      </nav>
+      <header class="landing-hero">
+        <span class="landing-eyebrow">Take your first step</span>
+        <h1>Move further, <span>together.</span></h1>
+        <p>Intaliq helps you set fitness goals, join sessions with local coaches and keep your momentum going.</p>
+        <div class="landing-cta">
+          <button type="button" class="btn btn-primary" data-action="landing-signup">Get started</button>
+          <button type="button" class="btn btn-ghost" data-action="landing-signin">I have an account</button>
+        </div>
+      </header>
+      <section class="landing-section" aria-labelledby="landing-features-title">
+        <h2 id="landing-features-title">Everything in one place</h2>
+        <div class="landing-features">
+          ${features.map(([icon, title, copy]) => `
+            <article class="landing-feature">
+              <span>${navIcon(icon)}</span>
+              <h3>${title}</h3>
+              <p>${copy}</p>
+            </article>
+          `).join("")}
+        </div>
+      </section>
+      <section class="landing-coach" id="landing-coach">
+        <div>
+          <h2>Are you a coach?</h2>
+          <p>Create sessions, admit members and post announcements.</p>
+        </div>
+        <button type="button" class="btn" data-action="landing-coach">Join as a coach</button>
+      </section>
+      ${landingFooter()}
+    </div>
+  `;
+}
+
+function landingFooter() {
+  const comingSoon = (label) => `<button type="button" class="landing-footer-link" data-action="future-feature" data-feature="${label}">${label}</button>`;
+  const columns = [
+    ["Product", [
+      `<button type="button" class="landing-footer-link" data-action="scroll-to" data-target="landing-features-title">Features</button>`,
+      `<button type="button" class="landing-footer-link" data-action="scroll-to" data-target="landing-coach">For coaches</button>`,
+      `<button type="button" class="landing-footer-link" data-action="landing-signup">Create an account</button>`,
+      `<button type="button" class="landing-footer-link" data-action="landing-signin">Log in</button>`,
+    ]],
+    ["Support", [
+      `<a class="landing-footer-link" href="mailto:${SUPPORT_EMAIL}?subject=Intaliq%20support">Contact support</a>`,
+      comingSoon("Help center"),
+      comingSoon("FAQ"),
+      `<a class="landing-footer-link" href="mailto:${SUPPORT_EMAIL}?subject=Intaliq%20problem%20report">Report a problem</a>`,
+    ]],
+    ["Legal", [
+      comingSoon("Privacy policy"),
+      comingSoon("Terms of service"),
+      comingSoon("Cookie policy"),
+      comingSoon("Accessibility"),
+    ]],
+  ];
+
+  return `
+    <footer class="landing-footer">
+      <div class="landing-footer-top">
+        <div class="landing-footer-about">
+          <span class="landing-brand"><img src="/favicon.svg" alt="" />Intaliq</span>
+          <p>Set goals, join coach-led sessions and keep your momentum going.</p>
+          <a class="landing-footer-email" href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a>
+        </div>
+        <nav class="landing-footer-links" aria-label="Footer">
+          ${columns.map(([heading, links]) => `
+            <div>
+              <h2>${heading}</h2>
+              <ul>${links.map((link) => `<li>${link}</li>`).join("")}</ul>
+            </div>
+          `).join("")}
+        </nav>
+      </div>
+      <div class="landing-footer-bottom">
+        <span>© ${new Date().getFullYear()} Intaliq. All rights reserved.</span>
+        <div class="landing-footer-meta">
+          <span>English</span>
+          ${themeToggleButton()}
+        </div>
+      </div>
+    </footer>
+  `;
+}
+
 function verifyView() {
   const message = state.authMessage ? `<div class="notice">${state.authMessage}</div>` : "";
   const error = state.authError ? `<div class="notice danger-box">${state.authError}</div>` : "";
@@ -797,6 +927,8 @@ function signInView() {
 
   return `
     <div class="auth-screen">
+      <button type="button" class="auth-home-link" data-action="go-landing">‹ Home</button>
+      ${themeToggleButton()}
       <header class="auth-hero">
         <h1>Welcome to Intaliq</h1>
         <p>Take your first step - Intaliq</p>
@@ -1739,6 +1871,7 @@ function profileView() {
         ${moreMenuRow("◉", "View Profile", "view-profile")}
         ${moreMenuRow("◇", "Find Partners", "find-partners")}
         ${moreMenuRow("✦", "Chat with AI", "chat-ai")}
+        ${moreMenuRow("◐", "Appearance", "toggle-theme", currentTheme() === "light" ? "Light" : "Dark", false)}
         ${moreMenuRow("◎", "Language", "future-language", "English")}
         ${moreMenuRow("?", "Help", "help", "intaliqsupport@gmail.com", false)}
         ${moreMenuRow("↩", "Log out", "signout")}
@@ -2304,6 +2437,11 @@ function handleAction(action, data = {}) {
     "role-member": () => setState({ profile: { ...state.profile, role: "member" }, authLoading: false, authError: "", authMessage: "" }),
     "role-coach": () => setState({ profile: { ...state.profile, role: "coach" }, authLoading: false, authError: "", authMessage: "" }),
     "back-to-login": () => setState({ route: "signin", authMode: "signin", authLoading: false, authError: "", authMessage: "" }),
+    "toggle-theme": () => toggleTheme(),
+    "go-landing": () => setState({ route: "landing", authLoading: false, authError: "", authMessage: "" }),
+    "landing-signin": () => setState({ route: "signin", authMode: "signin", authLoading: false, authError: "", authMessage: "" }),
+    "landing-signup": () => setState({ route: "signin", authMode: "signup", profile: { ...state.profile, role: "member" }, authLoading: false, authError: "", authMessage: "" }),
+    "landing-coach": () => setState({ route: "signin", authMode: "signup", profile: { ...state.profile, role: "coach" }, authLoading: false, authError: "", authMessage: "" }),
     "resend-email-code": () => resendEmailCode(),
     "skip-onboarding": () => navigate("home"),
     back: () => navigate(state.user ? "home" : "signin"),
@@ -2334,6 +2472,8 @@ function handleAction(action, data = {}) {
     "chat-ai": () => navigate("ai-chat"),
     "future-language": () => setState({ futureFeatureMessage: "This feature will be implemented in future versions." }),
     "close-future-feature": () => setState({ futureFeatureMessage: "" }),
+    "future-feature": () => setState({ futureFeatureMessage: `${data.feature || "This page"} will be available in a future version.` }),
+    "scroll-to": () => document.getElementById(data.target)?.scrollIntoView({ behavior: "smooth", block: "start" }),
     help: () => setState({ route: "profile-detail", authMessage: "Help: intaliqsupport@gmail.com" }),
     "review-requests": () => navigate("goals"),
     "make-announcement": () => navigate("partners"),
@@ -2944,6 +3084,7 @@ function updateGoalProgress(id, coveredDistance) {
 async function initAuth() {
   if (!supabase) {
     authReady = true;
+    state.route = "landing";
     state.authMode = "signin";
     render();
     return;
@@ -2956,7 +3097,7 @@ async function initAuth() {
   state.confirmSignOut = false;
   state.futureFeatureMessage = "";
   if (!user) {
-    state.route = "signin";
+    state.route = "landing";
     state.authMode = "signin";
   } else {
     state.profile = hydratedProfile || state.profile;
@@ -2974,6 +3115,7 @@ async function initAuth() {
   supabase.auth.onAuthStateChange(async (_event, session) => {
     const userFromSession = session?.user || null;
     const nextProfile = await profileWithDatabaseRole(userFromSession);
+    const previousRoute = state.route;
     state = loadState(userFromSession);
     state.confirmSignOut = false;
     state.futureFeatureMessage = "";
@@ -2982,7 +3124,8 @@ async function initAuth() {
       await hydrateSharedSessions();
       state.route = state.route === "signin" || !routeAllowedForRole(state.route, state.profile.role) ? routeForProfile(state.profile) : state.route;
     } else {
-      state.route = "signin";
+      // Keep visitors where they are in the sign-in flow instead of forcing the login page.
+      state.route = ["landing", "signin", "verify"].includes(previousRoute) ? previousRoute : "landing";
     }
     render();
   });

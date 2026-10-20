@@ -1,0 +1,9 @@
+name = "intaliq-ai-coach"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+
+[ai]
+binding = "AI"
+
+[vars]
+ALLOWED_ORIGINS = "https://intaliq-se-365.vercel.app,http://127.0.0.1:4173,http://localhost:4173"
