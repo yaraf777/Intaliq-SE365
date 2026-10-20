@@ -3345,6 +3345,13 @@ button {
   color: rgba(255, 255, 255, 0.72);
 }
 
+.input[aria-invalid="true"],
+.select[aria-invalid="true"],
+.textarea[aria-invalid="true"] {
+  border-color: var(--danger) !important;
+  box-shadow: 0 0 0 2px rgba(207, 77, 63, 0.35);
+}
+
 /* Wide screens: landing page */
 @media (min-width: 600px) and (max-width: 899px) {
   .landing-features {
@@ -3670,4 +3677,249 @@ button {
 
 .coach-application-card .coach-mini-action {
   justify-self: start;
+}
+
+/* Admin sessions: search, filters and bulk actions */
+.admin-session-toolbar {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.admin-chips button {
+  min-height: 34px;
+  border: 1px solid rgba(var(--text-rgb, 255, 255, 255), 0.2);
+  border-radius: 99px;
+  padding: 4px 12px;
+  background: transparent;
+  color: var(--text, #fff);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.admin-chips button span {
+  margin-inline-start: 4px;
+  opacity: 0.6;
+}
+
+.admin-chips button.active {
+  border-color: transparent;
+  background: var(--lime, #c7ff4f);
+  color: #173006;
+}
+
+.admin-chips button.active span {
+  opacity: 0.75;
+}
+
+.admin-selects {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.admin-selects .select {
+  min-height: 40px;
+  padding: 6px 10px;
+  font-size: 14px;
+}
+
+.admin-results-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.admin-results-bar > div {
+  display: flex;
+  gap: 16px;
+}
+
+.admin-bulk-bar {
+  position: sticky;
+  top: 8px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(var(--surface-rgb, 40, 40, 40), 0.97);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, calc(0.3 * var(--shadow-strength, 1)));
+  color: var(--text, #fff);
+}
+
+.admin-bulk-bar strong {
+  flex: 1;
+}
+
+.admin-select-session {
+  display: flex;
+  align-items: start;
+  gap: 10px;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.admin-select-session input {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  flex: none;
+  accent-color: var(--lime, #c7ff4f);
+}
+
+.admin-select-session > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.admin-card.selected {
+  outline: 2px solid var(--lime, #c7ff4f);
+}
+
+.admin-card.is-past {
+  opacity: 0.72;
+}
+
+.admin-host-link {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--lime-text, #c7ff4f);
+  font: inherit;
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.admin-show-more {
+  width: 100%;
+}
+
+@media (max-width: 420px) {
+  .admin-selects {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .admin-selects .select:last-child {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (min-width: 900px) {
+  .admin-session-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+}
+
+/* Admin users: phone-book directory */
+.admin-directory {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: start;
+}
+
+.admin-letter-group {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-letter-group + .admin-letter-group {
+  margin-top: 8px;
+}
+
+/* Stays pinned while scrolling through its letter, like a phone book. */
+.admin-letter-heading {
+  position: sticky;
+  top: -18px;
+  z-index: 2;
+  margin: 0 -4px;
+  padding: 6px 4px;
+  background: linear-gradient(rgba(var(--surface-rgb, 30, 30, 30), 0.96), rgba(var(--surface-rgb, 30, 30, 30), 0.9));
+  backdrop-filter: blur(6px);
+  border-radius: 8px;
+  color: var(--lime-text, #c7ff4f);
+  font-size: 15px;
+  font-weight: 900;
+  scroll-margin-top: 0;
+}
+
+.admin-letter-rail {
+  position: sticky;
+  top: 0;
+  /* Shrinks to fit between the header and the tab bar on short phones. */
+  max-height: calc(100dvh - 150px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 4px 2px;
+  border-radius: 99px;
+  background: rgba(var(--text-rgb, 255, 255, 255), 0.06);
+  touch-action: none;
+  user-select: none;
+}
+
+.admin-letter-rail button,
+.admin-letter-rail span {
+  flex: 0 1 17px;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  border: 0;
+  border-radius: 6px;
+  padding: 0;
+  background: none;
+  color: var(--lime-text, #c7ff4f);
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+  text-align: center;
+}
+
+.admin-letter-rail button {
+  cursor: pointer;
+}
+
+.admin-letter-rail span {
+  color: rgba(var(--text-rgb, 255, 255, 255), 0.25);
+}
+
+.admin-letter-rail button.active {
+  background: var(--lime, #c7ff4f);
+  color: #173006;
+}
+
+/* Big letter shown beside the rail while dragging along it. */
+.admin-letter-bubble {
+  position: absolute;
+  top: 40%;
+  inset-inline-end: calc(100% + 14px);
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  display: none;
+  place-items: center;
+  background: var(--lime, #c7ff4f);
+  color: #173006;
+  font-size: 28px;
+  font-weight: 900;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+
+.admin-letter-rail.scrubbing .admin-letter-bubble:not(:empty) {
+  display: grid;
 }

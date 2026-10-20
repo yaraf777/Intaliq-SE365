@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { currentLanguage, dateLocale, localize, setLanguage, translate } from "./i18n.js";
+import { birthdateLimits, birthdateProblem, passwordProblem, validateForm } from "./validation.js";
 
 const STORAGE_PREFIX = "intaliq-app-state-v2";
 const SHARED_SESSIONS_KEY = `${STORAGE_PREFIX}:shared-sessions`;
@@ -74,6 +75,10 @@ const seedState = {
   adminUsers: [],
   adminCoachApplications: [],
   adminSessions: [],
+  adminUserSort: "az",
+  adminSessionFilters: null,
+  adminSessionLimit: 0,
+  adminSelectedSessions: [],
   adminAnnouncements: [],
   adminLog: [],
   adminConfirm: null,
@@ -532,7 +537,12 @@ async function formData(form) {
   const values = Object.fromEntries(new FormData(form).entries());
   const avatarFile = new FormData(form).get("avatarFile");
   if (avatarFile instanceof File && avatarFile.size) {
-    values.avatarUrl = await fileToDataUrl(avatarFile);
+    try {
+      if (avatarFile.size > 10 * 1024 * 1024) throw new Error("too large");
+      values.avatarUrl = await avatarDataUrl(avatarFile);
+    } catch {
+      values.avatarInvalid = "true";
+    }
   }
   delete values.avatarFile;
   const interests = new FormData(form).getAll("interests");
@@ -544,6 +554,20 @@ async function formData(form) {
     values.specialty = specialties.join(", ");
   }
   return values;
+}
+
+// Profile photos are stored as data URLs, so shrink them to a small square JPEG first.
+async function avatarDataUrl(file, size = 256) {
+  const source = await fileToDataUrl(file);
+  const image = new Image();
+  image.src = source;
+  await image.decode();
+  const side = Math.min(image.naturalWidth, image.naturalHeight);
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  canvas.getContext("2d").drawImage(image, (image.naturalWidth - side) / 2, (image.naturalHeight - side) / 2, side, side, 0, 0, size, size);
+  return canvas.toDataURL("image/jpeg", 0.82);
 }
 
 function fileToDataUrl(file) {
@@ -592,7 +616,8 @@ function profileFromUser(user) {
     birthdate: meta.birthdate || "",
     city: meta.city || "",
     nationality: meta.nationality || "",
-    avatarUrl: meta.avatarUrl || "",
+    // Older accounts kept the photo here; newer ones keep it only in saved app state.
+    ...(meta.avatarUrl ? { avatarUrl: meta.avatarUrl } : {}),
     bio: meta.bio || "",
     // Users can edit their own metadata, so admin, suspension and coach approval only ever come from the database.
     isAdmin: false,
@@ -1064,7 +1089,7 @@ function signInView() {
         ${isSignup ? `
           <label class="field">
             <span>Name</span>
-            <input class="input auth-input" name="name" type="text" value="${state.profile.name}" required />
+            <input class="input auth-input" name="name" type="text" value="${state.profile.name}" maxlength="60" autocomplete="name" required />
           </label>
           ${selectedRole === "coach" ? `
             <div class="notice">Coach accounts are reviewed by the Intaliq team. You can use Intaliq as a member until you're approved.</div>
@@ -1086,12 +1111,12 @@ function signInView() {
         <input type="hidden" name="role" value="${selectedRole}" />
         <label class="field">
           <span>Password</span>
-          <input class="input auth-input" name="password" type="password" minlength="6" placeholder="Enter your password" autocomplete="${isSignup ? "new-password" : "current-password"}" required />
+          <input class="input auth-input" name="password" type="password" minlength="${isSignup ? 8 : 6}" maxlength="72" placeholder="Enter your password" autocomplete="${isSignup ? "new-password" : "current-password"}" required />
         </label>
         ${isSignup ? `
           <label class="field">
             <span>Confirm password</span>
-            <input class="input auth-input" name="confirmPassword" type="password" minlength="6" placeholder="Re-enter your password" autocomplete="new-password" required />
+            <input class="input auth-input" name="confirmPassword" type="password" minlength="8" maxlength="72" placeholder="Re-enter your password" autocomplete="new-password" required />
           </label>
         ` : ""}
         <button class="btn btn-primary auth-submit" type="submit" ${!hasSupabaseConfig || state.authLoading ? "disabled" : ""}>
@@ -1631,15 +1656,15 @@ function goalFormView() {
           ${activityTypePicker("Running")}
           <label class="field">
             <span>Goal name</span>
-            <input class="input" name="title" placeholder="Running goal" required />
+            <input class="input" name="title" placeholder="Running goal" maxlength="60" required />
           </label>
           <label class="field">
             <span>Due date</span>
-            <input class="input" name="due" type="date" required />
+            <input class="input" name="due" type="date" min="${todayDateValue()}" max="${dateYearsAhead(5)}" required />
           </label>
           <label class="field">
             <span>Desired distance (km)</span>
-            <input class="input" name="targetDistance" type="number" min="0.1" step="0.1" placeholder="20" required />
+            <input class="input" name="targetDistance" type="number" min="0.1" max="5000" step="0.1" placeholder="20" required />
           </label>
           <button class="btn btn-primary activity-submit" type="submit">Create Goal</button>
         </form>
@@ -1674,7 +1699,7 @@ function goalDetailView() {
         <input type="hidden" name="id" value="${goal.id}" />
         <label class="field">
           <span>Distance covered now (km)</span>
-          <input class="input" name="coveredDistance" type="number" min="0" step="0.1" value="${goal.coveredDistance || 0}" required />
+          <input class="input" name="coveredDistance" type="number" min="0" max="5000" step="0.1" value="${goal.coveredDistance || 0}" required />
         </label>
         <div class="goal-progress-summary">${progress}% complete</div>
         <button class="btn btn-primary activity-submit" type="submit">Update Goal</button>
@@ -1827,15 +1852,15 @@ function activityFormView() {
         ${activityTypePicker("Running")}
         <label class="field">
           <span>Time of activity</span>
-          <input class="input" name="time" type="datetime-local" required />
+          <input class="input" name="time" type="datetime-local" max="${localDateTimeValue()}" required />
         </label>
         <label class="field">
           <span>Distance covered (km)</span>
-          <input class="input" name="distance" type="number" min="0" step="0.1" placeholder="5.0" required />
+          <input class="input" name="distance" type="number" min="0.1" max="500" step="0.1" placeholder="5.0" required />
         </label>
         <label class="field">
           <span>Activity duration (minutes)</span>
-          <input class="input" name="duration" type="number" min="1" step="1" placeholder="30" required />
+          <input class="input" name="duration" type="number" min="1" max="1440" step="1" placeholder="30" required />
         </label>
         <button class="btn btn-primary activity-submit" type="submit">Save Activity</button>
       </form>
@@ -2010,7 +2035,7 @@ function sessionDetailView() {
           `).join("") : `<div class="empty">No pending users.</div>`}
         </div>
         <form class="card stack" data-form="announcement">
-          <label class="field"><span>Announcement</span><textarea class="textarea" name="announcement" placeholder="Share an update with this session"></textarea></label>
+          <label class="field"><span>Announcement</span><textarea class="textarea" name="announcement" placeholder="Share an update with this session" maxlength="500" required></textarea></label>
           <input type="hidden" name="sessionId" value="${session.id}" />
           <button class="btn btn-primary" type="submit">Post announcement</button>
         </form>
@@ -2157,7 +2182,7 @@ function profileEditView() {
           <span>Profile picture</span>
           <input name="avatarFile" type="file" accept="image/*" />
         </label>
-        <label class="field"><span>Full name</span><input class="input" name="name" value="${values.name}" required /></label>
+        <label class="field"><span>Full name</span><input class="input" name="name" value="${values.name}" maxlength="60" required /></label>
         ${usernameField(values.username, "input")}
         <label class="field"><span>Email</span><input class="input" name="email" type="email" value="${values.email}" required /></label>
         <label class="field"><span>Birthdate</span><input class="input" name="birthdate" type="date" value="${values.birthdate}" min="${birthdateLimits().min}" max="${birthdateLimits().max}" /></label>
@@ -2182,8 +2207,8 @@ function profileEditView() {
           <legend>Change password</legend>
           <p>Leave these blank to keep your current password.</p>
           <label class="field"><span>Current password</span><input class="input" name="currentPassword" type="password" autocomplete="current-password" /></label>
-          <label class="field"><span>New password</span><input class="input" name="newPassword" type="password" minlength="6" autocomplete="new-password" /></label>
-          <label class="field"><span>Confirm new password</span><input class="input" name="confirmPassword" type="password" minlength="6" autocomplete="new-password" /></label>
+          <label class="field"><span>New password</span><input class="input" name="newPassword" type="password" minlength="8" maxlength="72" autocomplete="new-password" /></label>
+          <label class="field"><span>Confirm new password</span><input class="input" name="confirmPassword" type="password" minlength="8" maxlength="72" autocomplete="new-password" /></label>
         </fieldset>
         <button class="btn btn-primary activity-submit" type="submit" ${state.authLoading ? "disabled" : ""}>${state.authLoading ? "Saving..." : "Update Profile"}</button>
       </form>
@@ -2209,7 +2234,7 @@ function profileSetupView() {
           <span>Add a profile picture (optional)</span>
           <input name="avatarFile" type="file" accept="image/*" />
         </label>
-        <label class="field"><span>Full name</span><input class="input auth-input" name="name" value="${escapeHtml(values.name)}" autocomplete="name" required /></label>
+        <label class="field"><span>Full name</span><input class="input auth-input" name="name" value="${escapeHtml(values.name)}" autocomplete="name" maxlength="60" required /></label>
         ${usernameField(values.username, "input auth-input")}
         <label class="field"><span>Birthdate</span><input class="input auth-input" name="birthdate" type="date" value="${values.birthdate}" min="${birthdateLimits().min}" max="${birthdateLimits().max}" required /></label>
         <label class="toggle-row">
@@ -2241,7 +2266,7 @@ function profileFormValues() {
 }
 
 function keepProfileDraft(data) {
-  const { currentPassword, newPassword, confirmPassword, password, avatarFile, ...draft } = data;
+  const { currentPassword, newPassword, confirmPassword, password, avatarFile, avatarInvalid, ...draft } = data;
   return { ...draft, showAge: draft.showAge === "true" ? "true" : "false" };
 }
 
@@ -2309,33 +2334,6 @@ async function checkUsernameInProfiles(username) {
     return { error: error.code === "42703" ? USERNAME_SETUP_ERROR : "Could not check that username. Please try again." };
   }
   return { available: !data.length };
-}
-
-const MIN_AGE = 13;
-const MAX_AGE = 120;
-
-function isoDate(date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-}
-
-function birthdateLimits() {
-  const today = new Date();
-  const latest = new Date(today.getFullYear() - MIN_AGE, today.getMonth(), today.getDate());
-  const earliest = new Date(today.getFullYear() - MAX_AGE, today.getMonth(), today.getDate());
-  return { min: isoDate(earliest), max: isoDate(latest) };
-}
-
-// Returns an error message, or "" for an empty (when optional) or valid birthdate.
-function birthdateProblem(value, { required = false } = {}) {
-  if (!value) return required ? "Enter your date of birth." : "";
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  const date = match && new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
-  if (!date || isoDate(date) !== value) return "Enter a real date of birth.";
-  const { min, max } = birthdateLimits();
-  if (value > isoDate(new Date())) return "Your date of birth can't be in the future.";
-  if (value > max) return `You need to be at least ${MIN_AGE} to use Intaliq.`;
-  if (value < min) return "Enter a real date of birth.";
-  return "";
 }
 
 // Returns an error message, or "" when the username can be saved.
@@ -2469,11 +2467,11 @@ function partnersView() {
           </label>
           <label class="field">
             <span>Subject</span>
-            <input class="input" name="subject" placeholder="e.g., Location Change, Time Update, Important Notice" required />
+            <input class="input" name="subject" placeholder="e.g., Location Change, Time Update, Important Notice" maxlength="80" required />
           </label>
           <label class="field">
             <span>Message</span>
-            <textarea class="textarea" name="announcement" placeholder="Write your announcement message..." required></textarea>
+            <textarea class="textarea" name="announcement" placeholder="Write your announcement message..." maxlength="500" required></textarea>
           </label>
           <div class="announcement-note"><strong>Note:</strong> This announcement will be sent to all participants in the selected session.</div>
           <div class="coach-form-actions">
@@ -2691,7 +2689,7 @@ function adminCoachApplicationCard(application) {
       <div class="admin-card-head">
         <div>
           <strong>${name}</strong>
-          <span><bdi>${[application.username ? `@${escapeHtml(application.username)}` : "", escapeHtml(application.email || "")].filter(Boolean).join(" · ")}</bdi></span>
+          <span><bdi dir="ltr">${[application.username ? `@${escapeHtml(application.username)}` : "", escapeHtml(application.email || "")].filter(Boolean).join(" · ")}</bdi></span>
         </div>
         <div class="admin-pills">${statusPill}</div>
       </div>
@@ -2711,23 +2709,82 @@ function adminCoachApplicationCard(application) {
   `;
 }
 
+const DIRECTORY_LATIN_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+const directoryCollator = new Intl.Collator(undefined, { sensitivity: "base", numeric: true });
+
+function adminUserName(user) {
+  return user.full_name || user.email?.split("@")[0] || "Unnamed account";
+}
+
+// Phone-book letter for a name: A-Z ignoring accents, the Arabic letter it
+// starts with (all alef forms filed under ا), or # for anything else.
+function directoryLetter(name) {
+  const first = String(name).trim().charAt(0);
+  const latin = first.normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase();
+  if (/^[A-Z]$/.test(latin)) return latin;
+  if (/^[ء-ي]$/.test(first)) return first.replace(/[أإآٱ]/, "ا");
+  return "#";
+}
+
 function adminUsersPanel() {
   const users = state.adminUsers || [];
+  const sort = state.adminUserSort || "az";
+  const empty = adminEmpty("No accounts found.", state.adminSearch ? "Try a different search." : "New sign-ups will appear here.");
   return `
     <form class="admin-search" data-form="admin-user-search" role="search">
       <input class="input" name="search" type="search" value="${escapeHtml(state.adminSearch || "")}" placeholder="Search name, username or email" aria-label="Search accounts" />
       <button class="coach-mini-action" type="submit">Search</button>
     </form>
-    <p class="admin-count">${users.length} account${users.length === 1 ? "" : "s"}</p>
-    <div class="admin-list">
-      ${users.length ? users.map(adminUserCard).join("") : adminEmpty("No accounts found.", state.adminSearch ? "Try a different search." : "New sign-ups will appear here.")}
+    <div class="admin-results-bar">
+      <p class="admin-count">${users.length} account${users.length === 1 ? "" : "s"}</p>
+      <div class="admin-chips" role="group" aria-label="Sort accounts">
+        ${[["az", "A–Z"], ["newest", "Newest"]].map(([id, label]) => `
+          <button type="button" class="${sort === id ? "active" : ""}" aria-pressed="${sort === id}" data-action="admin-user-sort" data-sort="${id}">${label}</button>
+        `).join("")}
+      </div>
+    </div>
+    ${!users.length ? empty : sort === "newest"
+      ? `<div class="admin-list">${users.map(adminUserCard).join("")}</div>`
+      : adminUserDirectory(users)}
+  `;
+}
+
+function adminUserDirectory(users) {
+  const groups = new Map();
+  [...users]
+    .sort((a, b) => directoryCollator.compare(adminUserName(a), adminUserName(b)))
+    .forEach((user) => {
+      const letter = directoryLetter(adminUserName(user));
+      groups.set(letter, [...(groups.get(letter) || []), user]);
+    });
+  const arabicLetters = [...groups.keys()].filter((letter) => !DIRECTORY_LATIN_LETTERS.includes(letter) && letter !== "#").sort(directoryCollator.compare);
+  const order = [...DIRECTORY_LATIN_LETTERS.filter((letter) => groups.has(letter)), ...arabicLetters, ...(groups.has("#") ? ["#"] : [])];
+  const groupId = (letter) => `admin-letter-${order.indexOf(letter)}`;
+  // Like a phone book, the rail always shows A-Z, with letters nobody's name starts with dimmed.
+  const railLetters = [...DIRECTORY_LATIN_LETTERS, ...arabicLetters, ...(groups.has("#") ? ["#"] : [])];
+  return `
+    <div class="admin-directory">
+      <div class="admin-list">
+        ${order.map((letter) => `
+          <section class="admin-letter-group" id="${groupId(letter)}" aria-label="${letter}">
+            <h3 class="admin-letter-heading">${letter}</h3>
+            ${groups.get(letter).map(adminUserCard).join("")}
+          </section>
+        `).join("")}
+      </div>
+      <nav class="admin-letter-rail" aria-label="Jump to letter" data-letter-rail>
+        ${railLetters.map((letter) => groups.has(letter)
+          ? `<button type="button" data-letter-target="${groupId(letter)}" aria-label="${letter}">${letter}</button>`
+          : `<span aria-hidden="true">${letter}</span>`).join("")}
+        <div class="admin-letter-bubble" aria-hidden="true"></div>
+      </nav>
     </div>
   `;
 }
 
 function adminUserCard(user) {
   const isSelf = user.id === state.user?.id;
-  const name = escapeHtml(user.full_name || user.email?.split("@")[0] || "Unnamed account");
+  const name = escapeHtml(adminUserName(user));
   const label = escapeHtml(user.username ? `@${user.username}` : user.email || "this account");
   const isCoach = user.role === "coach";
   const pills = [
@@ -2754,7 +2811,7 @@ function adminUserCard(user) {
       <div class="admin-card-head">
         <div>
           <strong>${name}${isSelf ? ` <small>(you)</small>` : ""}</strong>
-          <span><bdi>${[user.username ? `@${escapeHtml(user.username)}` : "", escapeHtml(user.email || "")].filter(Boolean).join(" · ")}</bdi></span>
+          <span><bdi dir="ltr">${[user.username ? `@${escapeHtml(user.username)}` : "", escapeHtml(user.email || "")].filter(Boolean).join(" · ")}</bdi></span>
         </div>
         <div class="admin-pills">${pills}</div>
       </div>
@@ -2765,31 +2822,172 @@ function adminUserCard(user) {
   `;
 }
 
+const ADMIN_SESSION_PAGE_SIZE = 30;
+const ADMIN_SESSION_DEFAULT_FILTERS = { query: "", status: "all", type: "all", level: "all", sort: "soonest" };
+const ADMIN_SESSION_STATUSES = [
+  ["all", "All"],
+  ["upcoming", "Upcoming"],
+  ["today", "Today"],
+  ["review", "Needs review"],
+  ["full", "Full"],
+  ["past", "Past"],
+];
+const ADMIN_SESSION_SORTS = [
+  ["soonest", "Soonest first"],
+  ["latest", "Latest date first"],
+  ["newest", "Newest created"],
+  ["pending", "Most pending requests"],
+  ["admitted", "Most admitted"],
+];
+
+function localDateValue(date = new Date()) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+// Flattens an admin_list_sessions row into what the filters, sorts and cards need.
+function adminSessionInfo(row) {
+  const session = row.data || {};
+  const members = Array.isArray(session.members) ? session.members.length : 0;
+  // Admitting someone both adds them to members and approves their request, so the larger count is the real one.
+  const admitted = Math.max(members, Number(row.approved_requests || 0));
+  const capacity = Number(session.capacity) || 0;
+  const startsAt = session.date ? new Date(`${session.date}T${session.time || "23:59"}`).getTime() : NaN;
+  return {
+    row,
+    session,
+    admitted,
+    capacity,
+    pending: Number(row.pending_requests || 0),
+    startsAt: Number.isNaN(startsAt) ? null : startsAt,
+    isPast: !Number.isNaN(startsAt) && startsAt < Date.now(),
+    isToday: session.date === localDateValue(),
+    isFull: capacity > 0 && admitted >= capacity,
+  };
+}
+
+function adminSessionMatchesStatus(info, status) {
+  if (status === "upcoming") return !info.isPast;
+  if (status === "today") return info.isToday;
+  if (status === "review") return info.pending > 0;
+  if (status === "full") return info.isFull && !info.isPast;
+  if (status === "past") return info.isPast;
+  return true;
+}
+
+function adminSessionSortValue(info, sort) {
+  // Sessions without a date go last whichever way the dates are sorted.
+  if (sort === "soonest") return [info.isPast ? 1 : 0, info.isPast ? -(info.startsAt ?? 0) : info.startsAt ?? Infinity];
+  if (sort === "latest") return [0, -(info.startsAt ?? -Infinity)];
+  if (sort === "newest") return [0, -new Date(info.row.created_at).getTime()];
+  if (sort === "pending") return [-info.pending, info.startsAt ?? Infinity];
+  if (sort === "admitted") return [-info.admitted, info.startsAt ?? Infinity];
+  return [0, 0];
+}
+
+function filteredAdminSessions() {
+  const filters = { ...ADMIN_SESSION_DEFAULT_FILTERS, ...state.adminSessionFilters };
+  const query = filters.query.trim().toLowerCase();
+  const all = (state.adminSessions || []).map(adminSessionInfo);
+  const searched = all.filter((info) => {
+    if (filters.type !== "all" && info.session.type !== filters.type) return false;
+    if (filters.level !== "all" && info.session.level !== filters.level) return false;
+    if (!query) return true;
+    return [info.session.title, info.row.host_label, info.session.hostName, info.session.location]
+      .some((value) => String(value || "").toLowerCase().includes(query));
+  });
+  const statusCounts = Object.fromEntries(ADMIN_SESSION_STATUSES.map(([id]) => [id, searched.filter((info) => adminSessionMatchesStatus(info, id)).length]));
+  const shown = searched
+    .filter((info) => adminSessionMatchesStatus(info, filters.status))
+    .sort((a, b) => {
+      const [a1, a2] = adminSessionSortValue(a, filters.sort);
+      const [b1, b2] = adminSessionSortValue(b, filters.sort);
+      return a1 - b1 || a2 - b2;
+    });
+  return { filters, all, shown, statusCounts };
+}
+
 function adminSessionsPanel() {
-  const sessions = state.adminSessions || [];
+  const { filters, all, shown, statusCounts } = filteredAdminSessions();
+  if (!all.length) return adminEmpty("No sessions yet.", "Sessions coaches create will appear here.");
+  const limit = state.adminSessionLimit || ADMIN_SESSION_PAGE_SIZE;
+  const selected = new Set(state.adminSelectedSessions || []);
+  const shownIds = shown.map((info) => info.row.id);
+  const allShownSelected = shownIds.length > 0 && shownIds.every((id) => selected.has(id));
+  const filtersActive = JSON.stringify(filters) !== JSON.stringify(ADMIN_SESSION_DEFAULT_FILTERS);
+  const option = (value, label, current) => `<option value="${value}" ${value === current ? "selected" : ""}>${label}</option>`;
   return `
-    <p class="admin-count">${sessions.length} session${sessions.length === 1 ? "" : "s"}</p>
-    <div class="admin-list">
-      ${sessions.length ? sessions.map(adminSessionCard).join("") : adminEmpty("No sessions yet.", "Sessions coaches create will appear here.")}
+    <div class="admin-session-toolbar">
+      <input class="input" type="search" data-admin-session-search value="${escapeHtml(filters.query)}" placeholder="Search title, host or location" aria-label="Search sessions" />
+      <div class="admin-chips" role="group" aria-label="Session status">
+        ${ADMIN_SESSION_STATUSES.map(([id, label]) => `
+          <button type="button" class="${filters.status === id ? "active" : ""}" aria-pressed="${filters.status === id}" data-action="admin-session-filter" data-key="status" data-value="${id}">
+            ${label} <span>${statusCounts[id]}</span>
+          </button>
+        `).join("")}
+      </div>
+      <div class="admin-selects">
+        <select class="select" data-admin-session-filter="type" aria-label="Activity type">
+          ${option("all", "All activities", filters.type)}
+          ${["Running", "Hiking", "Cycling"].map((type) => option(type, type, filters.type)).join("")}
+        </select>
+        <select class="select" data-admin-session-filter="level" aria-label="Level">
+          ${option("all", "All levels", filters.level)}
+          ${["Beginner", "Intermediate", "Advanced"].map((level) => option(level, level, filters.level)).join("")}
+        </select>
+        <select class="select" data-admin-session-filter="sort" aria-label="Sort sessions">
+          ${ADMIN_SESSION_SORTS.map(([id, label]) => option(id, label, filters.sort)).join("")}
+        </select>
+      </div>
     </div>
+    <div class="admin-results-bar">
+      <p class="admin-count">Showing ${shown.length} of ${all.length} sessions</p>
+      <div>
+        ${filtersActive ? `<button type="button" class="member-view-all" data-action="admin-session-clear-filters">Clear filters</button>` : ""}
+        ${shown.length ? `<button type="button" class="member-view-all" data-action="admin-session-select-all">${allShownSelected ? "Unselect all" : "Select all"}</button>` : ""}
+      </div>
+    </div>
+    ${selected.size ? `
+      <div class="admin-bulk-bar" role="region" aria-label="Selected sessions">
+        <strong>${selected.size} selected</strong>
+        <button type="button" class="coach-mini-action secondary" data-action="admin-session-clear-selection">Clear</button>
+        <button type="button" class="coach-mini-action danger" data-action="admin-confirm" data-kind="delete-sessions" data-id="selected" data-label="${selected.size} sessions">Delete selected</button>
+      </div>
+    ` : ""}
+    <div class="admin-list admin-session-grid">
+      ${shown.length
+        ? shown.slice(0, limit).map((info) => adminSessionCard(info, selected.has(info.row.id))).join("")
+        : adminEmpty("No sessions match.", "Try a different search or clear the filters.")}
+    </div>
+    ${shown.length > limit ? `<button type="button" class="btn btn-ghost admin-show-more" data-action="admin-session-more">Show more (${shown.length - limit} left)</button>` : ""}
   `;
 }
 
-function adminSessionCard(row) {
-  const session = row.data || {};
+function adminSessionCard(info, isSelected) {
+  const { row, session } = info;
   const title = escapeHtml(session.title || row.id);
-  const members = Array.isArray(session.members) ? session.members.length : 0;
-  const details = [session.type, session.level, [session.date, session.time].filter(Boolean).join(" ")].filter(Boolean).map(escapeHtml).join(" · ");
+  const when = info.startsAt ? adminDateTime(info.startsAt) : [session.date, session.time].filter(Boolean).join(" ") || "No date set";
+  const details = [session.type, session.level, when].filter(Boolean).map(escapeHtml).join(" · ");
+  const host = row.host_label || session.hostName || "Unknown";
+  const pills = [
+    info.isPast ? `<span class="pill gray">Past</span>` : "",
+    info.isToday && !info.isPast ? `<span class="pill">Today</span>` : "",
+    info.isFull && !info.isPast ? `<span class="pill gray">Full</span>` : "",
+    info.pending ? `<span class="pill warn">${info.pending} pending</span>` : "",
+  ].join("");
   return `
-    <article class="coach-request-card admin-card">
+    <article class="coach-request-card admin-card ${isSelected ? "selected" : ""} ${info.isPast ? "is-past" : ""}">
       <div class="admin-card-head">
-        <div>
-          <strong>${title}</strong>
-          <span>${details}</span>
-        </div>
-        ${row.pending_requests ? `<div class="admin-pills"><span class="pill warn">${row.pending_requests} pending</span></div>` : ""}
+        <label class="admin-select-session">
+          <input type="checkbox" data-admin-session-select value="${escapeHtml(row.id)}" ${isSelected ? "checked" : ""} aria-label="Select ${title}" />
+          <div>
+            <strong><bdi>${title}</bdi></strong>
+            <span>${details}</span>
+          </div>
+        </label>
+        ${pills ? `<div class="admin-pills">${pills}</div>` : ""}
       </div>
-      <p class="admin-meta">${members + Number(row.approved_requests || 0)} admitted · Created ${adminDate(row.created_at)} · Host: <bdi>${escapeHtml(row.host_label || "Unknown")}</bdi></p>
+      ${session.location ? `<p class="admin-meta">📍 <bdi>${escapeHtml(session.location)}</bdi></p>` : ""}
+      <p class="admin-meta">${info.capacity ? `${info.admitted}/${info.capacity} admitted` : `${info.admitted} admitted`} · Created ${adminDate(row.created_at)} · Host: <button type="button" class="admin-host-link" data-action="admin-session-filter" data-key="query" data-value="${escapeHtml(host)}" title="Show this host's sessions"><bdi>${escapeHtml(host)}</bdi></button></p>
       <div class="admin-card-actions">
         <button class="coach-mini-action danger" data-action="admin-confirm" data-kind="delete-session" data-id="${escapeHtml(row.id)}" data-label="${title}">Delete session</button>
       </div>
@@ -2860,6 +3058,7 @@ function adminConfirmModal() {
     "grant-admin": ["Make admin?", `${label} will be able to manage every account, session and announcement.`, "Make admin", false],
     "revoke-admin": ["Remove admin access?", `${label} will go back to a regular account.`, "Remove admin", true],
     "delete-session": ["Delete session?", `${label} and all of its join requests will be removed for everyone.`, "Delete", true],
+    "delete-sessions": ["Delete sessions?", `${label} and all of their join requests will be removed for everyone.`, "Delete all", true],
     "delete-announcement": ["Delete announcement?", `${label} will be removed for every user.`, "Delete", true],
     "approve-coach": ["Approve coach?", `${label} will be able to create sessions and admit members.`, "Approve", false],
     "reject-coach": ["Turn down application?", `${label} will stay a member and can apply again later.`, "Turn down", true],
@@ -2869,6 +3068,7 @@ function adminConfirmModal() {
   const reasonLabel = {
     suspend: "Reason (optional, saved in the activity log)",
     "delete-session": "Reason (optional, saved in the activity log)",
+    "delete-sessions": "Reason (optional, saved in the activity log)",
     "reject-coach": "Note to the applicant (optional, they'll see it)",
   }[confirm.kind];
   return `
@@ -2905,7 +3105,8 @@ const ADMIN_LOADERS = {
   },
   sessions: async () => {
     const { data, error } = await supabase.rpc("admin_list_sessions");
-    return { error, patch: { adminSessions: data || [] } };
+    const ids = new Set((data || []).map((row) => row.id));
+    return { error, patch: { adminSessions: data || [], adminSelectedSessions: state.adminSelectedSessions.filter((id) => ids.has(id)) } };
   },
   announcements: async () => {
     const { data, error } = await supabase
@@ -2956,6 +3157,34 @@ async function runAdminAction(rpcName, params, successMessage) {
   return true;
 }
 
+function forgetDeletedSessions(ids) {
+  const deleted = new Set(ids);
+  state.sessions = state.sessions.filter((session) => !deleted.has(session.id));
+  state.joinedSessions = state.joinedSessions.filter((sessionId) => !deleted.has(sessionId));
+  state.adminSelectedSessions = state.adminSelectedSessions.filter((sessionId) => !deleted.has(sessionId));
+  saveState();
+}
+
+// One call per session, so each deletion gets its own activity log entry and
+// one failure doesn't stop the rest.
+async function deleteSelectedSessions(note) {
+  const ids = [...state.adminSelectedSessions];
+  if (!supabase || !ids.length) return;
+  setState({ adminLoading: true, adminConfirm: null, adminError: "", authMessage: "" });
+  const failures = [];
+  const deleted = [];
+  for (const id of ids) {
+    const { error } = await supabase.rpc("admin_delete_session", { p_session: id, p_reason: note });
+    if (error) failures.push(adminErrorMessage(error));
+    else deleted.push(id);
+  }
+  forgetDeletedSessions(deleted);
+  state.authMessage = deleted.length ? `Deleted ${deleted.length} session${deleted.length === 1 ? "" : "s"}.` : "";
+  state.adminError = failures.length ? `${failures.length} couldn't be deleted: ${failures[0]}` : "";
+  const { error, patch } = await ADMIN_LOADERS.sessions();
+  setState({ ...(error ? {} : patch), adminLoading: false, adminError: state.adminError || (error ? adminErrorMessage(error) : "") });
+}
+
 async function confirmAdminAction({ kind, id, reason = "" }) {
   const note = reason.trim() || null;
   const actions = {
@@ -2965,12 +3194,9 @@ async function confirmAdminAction({ kind, id, reason = "" }) {
     "revoke-admin": () => runAdminAction("admin_set_admin", { p_user: id, p_is_admin: false }, "Admin access removed."),
     "delete-session": async () => {
       const deleted = await runAdminAction("admin_delete_session", { p_session: id, p_reason: note }, "Session deleted.");
-      if (deleted) {
-        state.sessions = state.sessions.filter((session) => session.id !== id);
-        state.joinedSessions = state.joinedSessions.filter((sessionId) => sessionId !== id);
-        saveState();
-      }
+      if (deleted) forgetDeletedSessions([id]);
     },
+    "delete-sessions": () => deleteSelectedSessions(note),
     "delete-announcement": () => runAdminAction("admin_delete_announcement", { p_announcement: id }, "Announcement deleted."),
     "approve-coach": () => runAdminAction("admin_review_coach", { p_user: id, p_approve: true, p_note: null }, "Coach approved."),
     "reject-coach": () => runAdminAction("admin_review_coach", { p_user: id, p_approve: false, p_note: note }, "Application turned down."),
@@ -3043,13 +3269,13 @@ function tab(route, icon, label, active) {
 
 function goalFields(goal) {
   return `
-    <label class="field"><span>${state.profile.role === "coach" ? "Plan title" : "Goal title"}</span><input class="input" name="title" value="${goal.title}" required /></label>
+    <label class="field"><span>${state.profile.role === "coach" ? "Plan title" : "Goal title"}</span><input class="input" name="title" value="${goal.title}" maxlength="60" required /></label>
     <div class="grid-2">
       <label class="field"><span>Category</span><select class="select" name="category">${["Strength", "Cardio", "Mobility", "Weight loss", "Nutrition", "Recovery"].map((category) => `<option ${category === goal.category ? "selected" : ""}>${category}</option>`).join("")}</select></label>
-      <label class="field"><span>Due</span><input class="input" name="due" value="${goal.due}" required /></label>
+      <label class="field"><span>Due</span><input class="input" name="due" value="${goal.due}" maxlength="40" required /></label>
     </div>
-    <label class="field"><span>Progress</span><input class="input" name="progress" type="number" min="0" max="100" value="${goal.progress}" /></label>
-    ${[0, 1, 2, 3].map((index) => `<label class="field"><span>Checkpoint ${index + 1}</span><input class="input" name="checkpoint${index}" value="${goal.checkpoints[index] || ""}" /></label>`).join("")}
+    <label class="field"><span>Progress</span><input class="input" name="progress" type="number" min="0" max="100" step="1" value="${goal.progress}" /></label>
+    ${[0, 1, 2, 3].map((index) => `<label class="field"><span>Checkpoint ${index + 1}</span><input class="input" name="checkpoint${index}" value="${goal.checkpoints[index] || ""}" maxlength="40" /></label>`).join("")}
   `;
 }
 
@@ -3063,13 +3289,13 @@ function goalTypeCard(goal) {
 function sessionFields() {
   return `
     ${activityTypePicker("Running")}
-    <label class="field"><span>Session Title</span><input class="input" name="title" placeholder="e.g., Morning Run Crew" required /></label>
-    <label class="field"><span>Date</span><input class="input" name="date" type="date" min="${todayDateValue()}" required /></label>
+    <label class="field"><span>Session Title</span><input class="input" name="title" placeholder="e.g., Morning Run Crew" maxlength="60" required /></label>
+    <label class="field"><span>Date</span><input class="input" name="date" type="date" min="${todayDateValue()}" max="${dateYearsAhead(1)}" required /></label>
     <label class="field"><span>Time</span><input class="input" name="time" type="time" required /></label>
     <label class="field"><span>Capacity</span><input class="input" name="capacity" type="number" min="2" max="50" placeholder="Maximum participants" required /></label>
-    <label class="field"><span>Location</span><input class="input" name="location" placeholder="e.g., King Abdullah Park, Riyadh" required /></label>
+    <label class="field"><span>Location</span><input class="input" name="location" placeholder="e.g., King Abdullah Park, Riyadh" maxlength="100" required /></label>
     <label class="field"><span>Intensity Level</span><select class="select" name="level"><option>Beginner</option><option>Intermediate</option><option>Advanced</option></select></label>
-    <label class="field"><span>Description</span><input class="input" name="notes" placeholder="e.g., any requirements, or expectations" /></label>
+    <label class="field"><span>Description</span><input class="input" name="notes" placeholder="e.g., any requirements, or expectations" maxlength="300" /></label>
     <label class="field accessibility-field">
       <span>Accessibility</span>
       <select class="select accessibility-select" name="accessibility">
@@ -3080,6 +3306,18 @@ function sessionFields() {
     </label>
     <input type="hidden" name="admission" value="Approval required" />
   `;
+}
+
+function dateYearsAhead(years) {
+  const now = new Date();
+  const later = new Date(now.getFullYear() + years, now.getMonth(), now.getDate());
+  return `${later.getFullYear()}-${String(later.getMonth() + 1).padStart(2, "0")}-${String(later.getDate()).padStart(2, "0")}`;
+}
+
+// Now, in the yyyy-mm-ddThh:mm form a datetime-local input expects.
+function localDateTimeValue() {
+  const now = new Date();
+  return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 }
 
 function todayDateValue() {
@@ -3217,11 +3455,12 @@ function makeActivity(data) {
 }
 
 function makeSession(data) {
-  const id = data.title
-    .replace(/[^a-z0-9]/gi, "")
-    .slice(0, 4)
-    .toUpperCase()
-    .padEnd(4, "X");
+  // Short code from the title plus random characters, so similar titles don't collide.
+  const prefix = data.title.replace(/[^a-z0-9]/gi, "").slice(0, 4).toUpperCase().padEnd(4, "X");
+  let id;
+  do {
+    id = `${prefix}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+  } while (state.sessions.some((session) => session.id === id));
 
   return {
     id,
@@ -3243,6 +3482,36 @@ function makeSession(data) {
   };
 }
 
+function validationContext() {
+  return {
+    role: state.profile.role,
+    authMode: state.authMode,
+    cities: cityOptions(),
+    nationalities: nationalityOptions().map((item) => item.value).filter(Boolean),
+    ownSessionIds: state.sessions.filter((session) => isOwnSession(session)).map((session) => session.id),
+  };
+}
+
+// Shows a validation problem at the top of the form without re-rendering,
+// so everything the user typed stays put.
+function showFormError(form, issue) {
+  form.querySelector("[data-form-error]")?.remove();
+  form.querySelectorAll("[aria-invalid]").forEach((field) => field.removeAttribute("aria-invalid"));
+  if (!issue) return;
+  const notice = document.createElement("div");
+  notice.className = "notice danger-box";
+  notice.dataset.formError = "";
+  notice.setAttribute("role", "alert");
+  notice.textContent = currentLanguage() === "ar" ? translate(issue.message) : issue.message;
+  form.prepend(notice);
+  const field = issue.field && form.querySelector(`[name="${issue.field}"]`);
+  if (field) {
+    field.setAttribute("aria-invalid", "true");
+    field.focus({ preventScroll: true });
+  }
+  notice.scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
+
 function bindEvents() {
   app.querySelectorAll("[data-route]").forEach((element) => {
     element.addEventListener("click", () => navigate(element.dataset.route));
@@ -3257,7 +3526,11 @@ function bindEvents() {
   app.querySelectorAll("[data-form]").forEach((form) => {
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
-      await handleForm(form.dataset.form, await formData(form));
+      const type = form.dataset.form;
+      const values = await formData(form);
+      const issue = validateForm(type, values, validationContext());
+      showFormError(form, issue);
+      if (!issue) await handleForm(type, values);
     });
   });
 
@@ -3270,6 +3543,79 @@ function bindEvents() {
 
   app.querySelector("[data-partner-search]")?.addEventListener("input", (event) => {
     setState({ partnerSearch: event.target.value });
+  });
+
+  app.querySelector("[data-admin-session-search]")?.addEventListener("input", (event) => {
+    if (event.isComposing) return;
+    const { value, selectionStart } = event.target;
+    updateAdminSessionFilters({ query: value });
+    // Rendering replaces the input, so put the cursor back where it was.
+    const input = app.querySelector("[data-admin-session-search]");
+    input?.focus();
+    input?.setSelectionRange(selectionStart, selectionStart);
+  });
+
+  app.querySelector("[data-letter-rail]") && bindLetterRail(app.querySelector("[data-letter-rail]"));
+
+  app.querySelectorAll("[data-admin-session-filter]").forEach((select) => {
+    select.addEventListener("change", () => updateAdminSessionFilters({ [select.dataset.adminSessionFilter]: select.value }));
+  });
+
+  app.querySelectorAll("[data-admin-session-select]").forEach((checkbox) => {
+    checkbox.addEventListener("change", () => {
+      const selected = new Set(state.adminSelectedSessions);
+      if (checkbox.checked) selected.add(checkbox.value);
+      else selected.delete(checkbox.value);
+      setState({ adminSelectedSessions: [...selected] });
+    });
+  });
+}
+
+// Phone-book index: tap a letter to jump, or drag along the rail to scrub
+// through letters with a bubble showing where you are. Touches scroll the
+// list directly instead of re-rendering.
+function bindLetterRail(rail) {
+  const bubble = rail.querySelector(".admin-letter-bubble");
+  let scrubbing = false;
+
+  const jumpTo = (button) => {
+    if (!button) return;
+    document.getElementById(button.dataset.letterTarget)?.scrollIntoView({ block: "start" });
+    rail.querySelectorAll(".active").forEach((item) => item.classList.remove("active"));
+    button.classList.add("active");
+    bubble.textContent = button.textContent;
+  };
+  const buttonAt = (event) => document.elementFromPoint(event.clientX, event.clientY)?.closest("[data-letter-target]");
+
+  rail.addEventListener("pointerdown", (event) => {
+    scrubbing = true;
+    rail.setPointerCapture(event.pointerId);
+    rail.classList.add("scrubbing");
+    jumpTo(buttonAt(event));
+    event.preventDefault();
+  });
+  rail.addEventListener("pointermove", (event) => {
+    if (scrubbing) jumpTo(buttonAt(event));
+  });
+  const stop = () => {
+    scrubbing = false;
+    rail.classList.remove("scrubbing");
+  };
+  rail.addEventListener("pointerup", stop);
+  rail.addEventListener("pointercancel", stop);
+  // Keyboard users tab to a letter and press Enter.
+  rail.addEventListener("click", (event) => {
+    if (event.detail === 0) jumpTo(event.target.closest("[data-letter-target]"));
+  });
+}
+
+// Changing what's shown starts paging over and drops the selection, so bulk
+// actions only ever apply to sessions the admin can see.
+function updateAdminSessionFilters(patch) {
+  setState({
+    adminSessionFilters: { ...ADMIN_SESSION_DEFAULT_FILTERS, ...state.adminSessionFilters, ...patch },
+    adminSessionLimit: ADMIN_SESSION_PAGE_SIZE,
+    adminSelectedSessions: [],
   });
 }
 
@@ -3344,6 +3690,16 @@ function handleAction(action, data = {}) {
     "admin-confirm": () => setState({ adminConfirm: { kind: data.kind, id: data.id, label: data.label }, authMessage: "" }),
     "cancel-admin-confirm": () => setState({ adminConfirm: null }),
     "reapply-coach": () => reapplyAsCoach(),
+    "admin-user-sort": () => setState({ adminUserSort: data.sort }),
+    "admin-session-filter": () => updateAdminSessionFilters({ [data.key]: data.value }),
+    "admin-session-clear-filters": () => updateAdminSessionFilters(ADMIN_SESSION_DEFAULT_FILTERS),
+    "admin-session-more": () => setState({ adminSessionLimit: (state.adminSessionLimit || ADMIN_SESSION_PAGE_SIZE) + ADMIN_SESSION_PAGE_SIZE }),
+    "admin-session-clear-selection": () => setState({ adminSelectedSessions: [] }),
+    "admin-session-select-all": () => {
+      const shownIds = filteredAdminSessions().shown.map((info) => info.row.id);
+      const allSelected = shownIds.every((id) => state.adminSelectedSessions.includes(id));
+      setState({ adminSelectedSessions: allSelected ? [] : shownIds });
+    },
   };
 
   actions[action]?.();
@@ -3506,7 +3862,7 @@ async function handleAuth(data) {
 
   if (isSignup) {
     if (response.data.session) {
-      await supabase.auth.signOut();
+      await supabase.auth.signOut({ scope: "local" });
     }
     setState({
       authLoading: false,
@@ -3526,7 +3882,8 @@ async function handleAuth(data) {
   if (!isSignup) {
     const verifiedUser = response.data.user;
     const verifiedProfile = await profileWithDatabaseRole(verifiedUser);
-    await supabase.auth.signOut();
+    // Local scope: a global sign-out would end this account's sessions on every other device too.
+    await supabase.auth.signOut({ scope: "local" });
     if (verifiedProfile?.isSuspended) {
       setState({ authLoading: false, authError: SUSPENDED_MESSAGE, authMessage: "" });
       return;
@@ -3701,7 +4058,7 @@ async function verifyEmailCode(data) {
 }
 
 async function signOut() {
-  if (supabase) await supabase.auth.signOut();
+  if (supabase) await supabase.auth.signOut({ scope: "local" });
   setState({ user: null, route: "signin", authMode: "signin", confirmSignOut: false, authError: "", authMessage: "Signed out." });
 }
 
@@ -3718,25 +4075,33 @@ function profileMetadata(profile) {
     birthdate: profile.birthdate,
     city: profile.city,
     nationality: profile.nationality,
-    avatarUrl: profile.avatarUrl,
     bio: profile.bio,
+    // The photo stays in the app's saved state. Auth metadata is copied into every
+    // login token, and an image there makes the token too big to store and send.
+    avatarUrl: "",
   };
 }
 
 // Claims the username in the profiles table first (its unique index is the
 // final word on availability), then saves everything to the auth account.
+const SESSION_EXPIRED_MESSAGE = "Your sign-in has expired. Log in again, then save your changes.";
+
 async function saveAccount(profile, extraUpdate = {}) {
   if (!supabase || !state.user) return "";
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (!sessionData.session) return SESSION_EXPIRED_MESSAGE;
   const profileError = await syncPublicProfile(profile);
   if (profileError) return usernameSaveError(profileError);
   const { error } = await supabase.auth.updateUser({ ...extraUpdate, data: profileMetadata(profile) });
+  if (error?.name === "AuthSessionMissingError") return SESSION_EXPIRED_MESSAGE;
   return error ? error.message : "";
 }
 
 function passwordChangeProblem(currentPassword, newPassword, confirmPassword) {
   if (!currentPassword && !newPassword && !confirmPassword) return "";
   if (!currentPassword) return "Enter your current password to change it.";
-  if (newPassword.length < 6) return "New password must be at least 6 characters.";
+  const strengthError = passwordProblem(newPassword);
+  if (strengthError) return strengthError;
   if (newPassword !== confirmPassword) return "New passwords do not match.";
   if (newPassword === currentPassword) return "Choose a new password that's different from your current one.";
   return "";
@@ -4136,7 +4501,7 @@ async function initAuth() {
     state.route = "landing";
     state.authMode = "signin";
   } else {
-    state.profile = hydratedProfile || state.profile;
+    state.profile = { ...state.profile, ...hydratedProfile };
     await hydrateSharedSessions();
     if (state.route === "signin" || !routeAllowedForRole(state.route, state.profile.role)) {
       state.route = routeForProfile(state.profile);
@@ -4148,36 +4513,43 @@ async function initAuth() {
   authReady = true;
   render();
 
-  supabase.auth.onAuthStateChange(async (event, session) => {
-    const userFromSession = session?.user || null;
-    // Profile saves and token refreshes are already reflected in state; reloading
-    // here would race the save and drop its confirmation message.
-    if ((event === "USER_UPDATED" || event === "TOKEN_REFRESHED") && userFromSession?.id === state.user?.id) return;
-    const nextProfile = await profileWithDatabaseRole(userFromSession);
-    if (userFromSession && nextProfile?.isSuspended) {
-      signOutSuspendedUser();
-      return;
-    }
-    const previousRoute = state.route;
-    state = loadState(userFromSession);
-    state.confirmSignOut = false;
-    state.futureFeatureMessage = "";
-    if (userFromSession) {
-      state.profile = nextProfile || state.profile;
-      await hydrateSharedSessions();
-      state.route = state.route === "signin" || !routeAllowedForRole(state.route, state.profile.role) ? routeForProfile(state.profile) : state.route;
-    } else {
-      // Keep visitors where they are in the sign-in flow instead of forcing the login page.
-      state.route = ["landing", "signin", "verify"].includes(previousRoute) ? previousRoute : "landing";
-      if (suspendedSignOutPending) {
-        suspendedSignOutPending = false;
-        state.route = "signin";
-        state.authMode = "signin";
-        state.authError = SUSPENDED_MESSAGE;
-      }
-    }
-    render();
+  // supabase-js holds its auth lock while it runs this callback, so awaiting other
+  // Supabase calls in it deadlocks. After 5s the lock is stolen and two token
+  // refreshes can race, which deletes the session ("Auth session missing!").
+  supabase.auth.onAuthStateChange((event, session) => {
+    setTimeout(() => handleAuthChange(event, session), 0);
   });
+}
+
+async function handleAuthChange(event, session) {
+  const userFromSession = session?.user || null;
+  // Profile saves and token refreshes are already reflected in state; reloading
+  // here would race the save and drop its confirmation message.
+  if ((event === "USER_UPDATED" || event === "TOKEN_REFRESHED") && userFromSession?.id === state.user?.id) return;
+  const nextProfile = await profileWithDatabaseRole(userFromSession);
+  if (userFromSession && nextProfile?.isSuspended) {
+    signOutSuspendedUser();
+    return;
+  }
+  const previousRoute = state.route;
+  state = loadState(userFromSession);
+  state.confirmSignOut = false;
+  state.futureFeatureMessage = "";
+  if (userFromSession) {
+    state.profile = { ...state.profile, ...nextProfile };
+    await hydrateSharedSessions();
+    state.route = state.route === "signin" || !routeAllowedForRole(state.route, state.profile.role) ? routeForProfile(state.profile) : state.route;
+  } else {
+    // Keep visitors where they are in the sign-in flow instead of forcing the login page.
+    state.route = ["landing", "signin", "verify"].includes(previousRoute) ? previousRoute : "landing";
+    if (suspendedSignOutPending) {
+      suspendedSignOutPending = false;
+      state.route = "signin";
+      state.authMode = "signin";
+      state.authError = SUSPENDED_MESSAGE;
+    }
+  }
+  render();
 }
 
 updateStatusTime();
