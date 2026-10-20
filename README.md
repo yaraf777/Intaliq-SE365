@@ -73,3 +73,19 @@ Then redeploy:
 ```bash
 vercel --prod
 ```
+
+## Admin accounts
+
+1. Run `supabase/profile-username.sql`, then `supabase/admin.sql`, in the Supabase SQL Editor.
+2. Sign up in the app as usual and finish profile setup.
+3. In the SQL Editor, make that account an admin:
+
+```sql
+update public.profiles set is_admin = true where lower(email) = lower('you@example.com');
+```
+
+Admins get **Admin Dashboard** under More: platform stats, coach application review, user search, coach/user role changes, suspending and restoring accounts, granting admin to others, deleting sessions, announcements to every user, and an activity log of every admin action. Admin rights are checked in the database, not the app, and users can't grant them to themselves.
+
+### Coach vetting
+
+Signing up as a coach files an application; the account stays a member until an admin approves it under **Coach applications**. Turned-down applicants see the admin's note on their home screen and can apply again. Only approved coaches (and admins) can create sessions; the database enforces this. Accounts that were already coaches when `admin.sql` first ran are approved automatically.

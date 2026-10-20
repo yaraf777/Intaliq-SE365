@@ -4,3 +4,4 @@ dist/
 node_modules/
 .env.local
 .env
+supabase/.temp/

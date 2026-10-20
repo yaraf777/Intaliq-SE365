@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { currentLanguage, dateLocale, localize, setLanguage } from "./i18n.js";
+import { currentLanguage, dateLocale, localize, setLanguage, translate } from "./i18n.js";
 
 const STORAGE_PREFIX = "intaliq-app-state-v2";
 const SHARED_SESSIONS_KEY = `${STORAGE_PREFIX}:shared-sessions`;
@@ -36,6 +36,7 @@ const seedState = {
   user: null,
   profile: {
     name: "",
+    username: "",
     email: "",
     role: "member",
     fitnessLevel: "Beginner",
@@ -44,10 +45,14 @@ const seedState = {
     age: "",
     showAge: "true",
     birthdate: "",
-    city: "Jeddah",
+    city: "",
     nationality: "",
     avatarUrl: "",
     bio: "",
+    isAdmin: false,
+    isSuspended: false,
+    coachStatus: "",
+    coachReviewNote: "",
   },
   goals: [],
   activities: [],
@@ -60,6 +65,18 @@ const seedState = {
   partnerDirectoryLoading: false,
   partnerDirectoryError: "",
   partnerSearch: "",
+  platformAnnouncements: [],
+  adminTab: "overview",
+  adminLoading: false,
+  adminError: "",
+  adminSearch: "",
+  adminOverview: null,
+  adminUsers: [],
+  adminCoachApplications: [],
+  adminSessions: [],
+  adminAnnouncements: [],
+  adminLog: [],
+  adminConfirm: null,
 };
 
 let state = safeLoadState();
@@ -71,15 +88,28 @@ let authReady = false;
 let messageTimer = null;
 
 // Theme is a device preference, so it lives outside the per-user app state.
-// index.html applies the saved value before first paint to avoid a flash.
+// index.html applies it before first paint to avoid a flash. Until the visitor
+// picks a theme, it follows the device's light/dark setting.
 function currentTheme() {
   return document.documentElement.dataset.theme === "light" ? "light" : "dark";
 }
 
-function toggleTheme() {
-  const theme = currentTheme() === "light" ? "dark" : "light";
+function savedTheme() {
+  try {
+    return localStorage.getItem(THEME_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;
   document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "light" ? "#f7f8f3" : "#050505");
+}
+
+function toggleTheme() {
+  const theme = currentTheme() === "light" ? "dark" : "light";
+  applyTheme(theme);
   try {
     localStorage.setItem(THEME_KEY, theme);
   } catch {
@@ -87,6 +117,12 @@ function toggleTheme() {
   }
   render();
 }
+
+window.matchMedia?.("(prefers-color-scheme: light)").addEventListener("change", (event) => {
+  if (savedTheme() === "light" || savedTheme() === "dark") return;
+  applyTheme(event.matches ? "light" : "dark");
+  render();
+});
 
 function themeToggleButton() {
   const isLight = currentTheme() === "light";
@@ -375,7 +411,23 @@ async function syncLocalCoachSessionsToRemote() {
   return coachSessions;
 }
 
+async function loadPlatformAnnouncements() {
+  if (!supabase || !state.user) return [];
+  const { data, error } = await supabase
+    .from("app_announcements")
+    .select("id, title, body, created_at")
+    .order("created_at", { ascending: false })
+    .limit(20);
+
+  if (error) {
+    console.warn("Unable to load announcements:", error.message);
+    return [];
+  }
+  return data || [];
+}
+
 async function hydrateSharedSessions() {
+  const platformAnnouncements = await loadPlatformAnnouncements();
   const localCoachSessions = await syncLocalCoachSessionsToRemote();
   const admissionState = await loadRemoteAdmissionState(await loadRemoteSessions());
   const remoteSessions = admissionState.sessions;
@@ -388,6 +440,7 @@ async function hydrateSharedSessions() {
   state = {
     ...state,
     sessions,
+    platformAnnouncements,
     joinedSessions: state.profile.role === "coach"
       ? []
       : [...new Set([...(state.joinedSessions || []), ...confirmedSessionIds])],
@@ -469,7 +522,7 @@ function showTemporaryMessage(message, patch = {}, timeout = 2500) {
 
 function navigate(route) {
   if (messageTimer) clearTimeout(messageTimer);
-  setState({ route, authError: "", authMessage: "", confirmJoinSessionId: "", confirmDeleteSessionId: "" });
+  setState({ route, authError: "", authMessage: "", confirmJoinSessionId: "", confirmDeleteSessionId: "", profileDraft: null });
   if (state.user && state.profile.role === "coach" && route === "goals") {
     hydrateSharedSessions().then(render);
   }
@@ -517,6 +570,8 @@ function publicUser(user) {
 
 function accountRole(source = {}) {
   if (source.role === "coach") return "coach";
+  // An explicit member role wins over a leftover specialty, e.g. after an admin changes a coach back.
+  if (source.role === "member") return "member";
   if (source.specialty || source.coaching_specialty) return "coach";
   return "member";
 }
@@ -526,6 +581,7 @@ function profileFromUser(user) {
   const meta = user.user_metadata || {};
   return {
     name: meta.name || meta.full_name || user.email?.split("@")[0] || "User",
+    username: meta.username || "",
     email: user.email || meta.email || "",
     role: accountRole(meta),
     fitnessLevel: meta.fitnessLevel || "Beginner",
@@ -534,10 +590,15 @@ function profileFromUser(user) {
     age: meta.age || "",
     showAge: meta.showAge ?? "true",
     birthdate: meta.birthdate || "",
-    city: meta.city || "Jeddah",
+    city: meta.city || "",
     nationality: meta.nationality || "",
     avatarUrl: meta.avatarUrl || "",
     bio: meta.bio || "",
+    // Users can edit their own metadata, so admin, suspension and coach approval only ever come from the database.
+    isAdmin: false,
+    isSuspended: false,
+    coachStatus: "",
+    coachReviewNote: "",
   };
 }
 
@@ -547,22 +608,30 @@ function profileFromPublicProfile(row, user = state.user) {
   return {
     ...baseProfile,
     name: row.name || row.full_name || row.username || baseProfile.name,
+    username: row.username || baseProfile.username,
     email: row.email || baseProfile.email,
     role: accountRole(row),
     primaryGoal: row.primary_goal || row.primaryGoal || baseProfile.primaryGoal,
     specialty: row.specialty || baseProfile.specialty,
     city: row.city || baseProfile.city,
     nationality: row.nationality || baseProfile.nationality,
+    isAdmin: row.is_admin === true && row.is_suspended !== true,
+    isSuspended: row.is_suspended === true,
   };
 }
 
 function routeForProfile(profile = state.profile) {
+  if (!profile.username) return "profile-setup";
   const isCoach = profile.role === "coach";
   if (isCoach) return state.sessions.some((session) => isOwnSession(session, profile)) ? "home" : "onboarding";
+  // Coach applicants see their review status on Home rather than member goal onboarding.
+  if (["pending", "rejected"].includes(profile.coachStatus)) return "home";
   return state.goals.length ? "home" : "onboarding";
 }
 
 function routeAllowedForRole(route, role = state.profile.role) {
+  // Only hides the screen; every admin action is checked again in Supabase.
+  if (route === "admin") return Boolean(state.profile.isAdmin);
   const coachOnly = new Set(["activities", "stats", "history", "goal-form", "goal-detail", "activity-form"]);
   const memberOnly = new Set([]);
   if (role === "coach") return !coachOnly.has(route);
@@ -573,13 +642,28 @@ async function profileWithDatabaseRole(user) {
   const authProfile = profileFromUser(user);
   if (!supabase || !user) return authProfile;
 
-  const { data } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", user.id)
-    .maybeSingle();
+  const [{ data }, coachReview] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", user.id)
+      .maybeSingle(),
+    loadCoachReview(user.id),
+  ]);
 
-  return profileFromPublicProfile(data, user) || authProfile;
+  return { ...(profileFromPublicProfile(data, user) || authProfile), ...coachReview };
+}
+
+// Coach sign-ups are reviewed by an admin; until then the account stays a member.
+async function loadCoachReview(userId) {
+  const { data, error } = await supabase
+    .from("coach_applications")
+    .select("status, review_note")
+    .eq("user_id", userId)
+    .maybeSingle();
+  // Before admin.sql is run the table doesn't exist, which just means nobody is under review.
+  if (error || !data) return { coachStatus: "", coachReviewNote: "" };
+  return { coachStatus: data.status, coachReviewNote: data.review_note || "" };
 }
 
 function initials(name) {
@@ -698,13 +782,20 @@ function render() {
     return;
   }
 
-  const protectedRoutes = ["home", "events", "activities", "stats", "history", "requests", "goals", "sessions", "partners", "find-partners", "friend-chat", "profile", "profile-detail", "profile-edit", "ai-chat", "goal-form", "goal-detail", "activity-form", "session-form", "session-detail"];
+  const protectedRoutes = ["home", "events", "activities", "stats", "history", "requests", "goals", "sessions", "partners", "find-partners", "friend-chat", "profile", "profile-detail", "profile-edit", "ai-chat", "goal-form", "goal-detail", "activity-form", "session-form", "session-detail", "profile-setup", "admin"];
   if (protectedRoutes.includes(state.route) && !state.user) {
     state.route = "landing";
   }
 
   if (state.user && !routeAllowedForRole(state.route, state.profile.role)) {
     state.route = "home";
+  }
+
+  // New accounts (and older ones without a username) finish their profile first.
+  if (state.user && !state.profile.username) {
+    state.route = "profile-setup";
+  } else if (state.route === "profile-setup") {
+    state.route = state.user ? routeForProfile(state.profile) : "landing";
   }
 
   const views = {
@@ -726,15 +817,17 @@ function render() {
     profile: profileView,
     "profile-detail": profileDetailView,
     "profile-edit": profileEditView,
+    "profile-setup": profileSetupView,
     "ai-chat": aiChatView,
     "goal-form": goalFormView,
     "goal-detail": goalDetailView,
     "activity-form": activityFormView,
     "session-form": sessionFormView,
     "session-detail": sessionDetailView,
+    admin: adminView,
   };
 
-  app.innerHTML = (views[state.route] || landingView)() + signOutConfirmModal() + joinSessionConfirmModal() + deleteSessionConfirmModal() + futureFeatureModal();
+  app.innerHTML = (views[state.route] || landingView)() + signOutConfirmModal() + joinSessionConfirmModal() + deleteSessionConfirmModal() + futureFeatureModal() + adminConfirmModal();
   localize(app);
   bindEvents();
 }
@@ -974,6 +1067,7 @@ function signInView() {
             <input class="input auth-input" name="name" type="text" value="${state.profile.name}" required />
           </label>
           ${selectedRole === "coach" ? `
+            <div class="notice">Coach accounts are reviewed by the Intaliq team. You can use Intaliq as a member until you're approved.</div>
             ${specialtyPicker(state.profile.specialty)}
           ` : `
             ${interestPicker(state.profile.primaryGoal)}
@@ -1034,9 +1128,10 @@ function homeView() {
 function memberHomeView() {
   const activeGoal = state.goals[0];
   const displayName = state.profile.name || "Intaliq athlete";
-  const totalDistance = state.activities.reduce((total, activity) => total + Number(activity.distance || 0), 0);
+  const weekActivities = activitiesForPeriod("Week");
+  const weekDistance = weekActivities.reduce((total, activity) => total + Number(activity.distance || 0), 0);
   const calories = state.activities.reduce((total, activity) => total + activityCalories(activity), 0).toLocaleString();
-  const activeDays = `${Math.min(7, new Set(state.activities.map((activity) => activity.time?.slice(0, 10))).size)}/7`;
+  const activeDays = `${new Set(weekActivities.map((activity) => activity.time?.slice(0, 10))).size}/7`;
   const bookedSessions = state.sessions.filter((session) => sessionConfirmedForUser(session));
   const announcements = relevantAnnouncements();
   const message = state.authMessage ? `<div class="member-toast">${state.authMessage}</div>` : "";
@@ -1047,12 +1142,13 @@ function memberHomeView() {
         <h1>Welcome back, ${displayName}!</h1>
         <p>Take your first step - Intaliq</p>
       </header>
+      ${coachApplicationCard()}
 
       <section class="member-stat-grid" aria-label="User stats">
-        ${memberStat("This Week", `${formatDistance(totalDistance)} km`, "")}
+        ${memberStat("This Week", `${formatDistance(weekDistance)} km`, "")}
         ${memberStat("Calories", calories, "flame")}
         ${memberStat("Active Days", activeDays, "calendar")}
-        ${memberStat("Sessions", state.joinedSessions.length, "group")}
+        ${memberStat("Sessions", bookedSessions.length, "group")}
       </section>
 
       <section class="member-section">
@@ -1118,6 +1214,45 @@ function memberHomeView() {
   `);
 }
 
+function coachApplicationCard() {
+  const status = state.profile.coachStatus;
+  const note = state.profile.coachReviewNote
+    ? `<p>Note from the Intaliq team: ${escapeHtml(state.profile.coachReviewNote)}</p>`
+    : "";
+  const error = state.authError ? `<div class="notice danger-box">${state.authError}</div>` : "";
+  if (status === "pending") {
+    return `
+      <article class="member-announcement-card coach-application-card">
+        <span>Coach application</span>
+        <strong>Under review</strong>
+        <p>The Intaliq team is checking your coaching details. You can use Intaliq as a member until you're approved.</p>
+      </article>
+    `;
+  }
+  if (status === "rejected") {
+    return `
+      <article class="member-announcement-card coach-application-card">
+        <span>Coach application</span>
+        <strong>Not approved yet</strong>
+        ${note}
+        <p>Update your profile and apply again, or email ${SUPPORT_EMAIL} with questions.</p>
+        ${error}
+        <button class="coach-mini-action" data-action="reapply-coach">Apply again</button>
+      </article>
+    `;
+  }
+  if (status === "revoked") {
+    return `
+      <article class="member-announcement-card coach-application-card">
+        <span>Coach application</span>
+        <strong>Coach access removed</strong>
+        <p>Email ${SUPPORT_EMAIL} if you have questions.</p>
+      </article>
+    `;
+  }
+  return "";
+}
+
 function bookedSessionCard(session) {
   return `
     <button class="booked-session-card" data-action="session-detail" data-id="${session.id}">
@@ -1129,8 +1264,16 @@ function bookedSessionCard(session) {
   `;
 }
 
+function teamAnnouncements() {
+  return (state.platformAnnouncements || []).map((announcement) => ({
+    title: escapeHtml(announcement.title),
+    message: escapeHtml(announcement.body),
+  }));
+}
+
 function relevantAnnouncements() {
-  return state.sessions
+  const fromTeam = teamAnnouncements().map((item) => ({ ...item, sessionTitle: "Intaliq team" }));
+  return [...fromTeam, ...state.sessions
     .filter((session) => sessionConfirmedForUser(session))
     .flatMap((session) => (session.announcements || []).map((announcement) => {
       const [title, ...messageParts] = announcement.split(": ");
@@ -1139,7 +1282,7 @@ function relevantAnnouncements() {
         title: messageParts.length ? title : "Session update",
         message: messageParts.length ? messageParts.join(": ") : announcement,
       };
-    }));
+    }))];
 }
 
 function eventNotificationsByType() {
@@ -1149,14 +1292,17 @@ function eventNotificationsByType() {
     Hiking: [],
     Cycling: [],
   };
-  groups.All = (state.generalAnnouncements || []).map((announcement) => {
-    const [title, ...messageParts] = announcement.split(": ");
-    return {
-      title: messageParts.length ? title : "General announcement",
-      message: messageParts.length ? messageParts.join(": ") : announcement,
-      meta: "General",
-    };
-  });
+  groups.All = [
+    ...teamAnnouncements().map((item) => ({ ...item, meta: "Intaliq team" })),
+    ...(state.generalAnnouncements || []).map((announcement) => {
+      const [title, ...messageParts] = announcement.split(": ");
+      return {
+        title: messageParts.length ? title : "General announcement",
+        message: messageParts.length ? messageParts.join(": ") : announcement,
+        meta: "General",
+      };
+    }),
+  ];
 
   const relevantSessions = state.profile.role === "coach"
     ? state.sessions
@@ -1313,8 +1459,10 @@ function statPeriodCard(period) {
   const activities = activitiesForPeriod(period);
   const distance = activities.reduce((total, activity) => total + Number(activity.distance || 0), 0);
   const calories = activities.reduce((total, activity) => total + activityCalories(activity), 0);
-  const distanceHeight = Math.min(100, Math.max(8, distance * 10));
-  const calorieHeight = Math.min(100, Math.max(8, calories / 20));
+  // Empty periods draw no bar; any real value stays visible as at least a sliver.
+  const barHeight = (value) => (value > 0 ? Math.min(100, Math.max(4, value)) : 0);
+  const distanceHeight = barHeight(distance * 10);
+  const calorieHeight = barHeight(calories / 20);
 
   return `
     <article class="stat-period-card">
@@ -1409,7 +1557,7 @@ function coachUpcomingCard(session) {
   const actionAttrs = session.isDemo ? "" : `data-action="session-detail" data-id="${session.id}"`;
   return `
     <article class="coach-session-card" ${actionAttrs}>
-      <div class="session-mark">${interestIcon(session.type === "Cardio" ? "Running" : "Cycling")}</div>
+      <div class="session-mark">${interestIcon(session.type) || interestIcon("Running")}</div>
       <div class="coach-session-main">
         <div class="coach-session-title">
           <h3>${session.title}</h3>
@@ -1894,6 +2042,7 @@ function profileView() {
       ${message}
       <div class="more-menu-list">
         ${moreMenuRow("◉", "View Profile", "view-profile")}
+        ${state.profile.isAdmin ? moreMenuRow("⚑", "Admin Dashboard", "open-admin") : ""}
         ${moreMenuRow("◇", "Find Partners", "find-partners")}
         ${moreMenuRow("✦", "Chat with AI", "chat-ai")}
         ${moreMenuRow("◐", "Appearance", "toggle-theme", currentTheme() === "light" ? "Light" : "Dark", false)}
@@ -1919,12 +2068,13 @@ function moreMenuRow(icon, label, action, meta = "", showArrow = true) {
 function profileDetailView() {
   const name = state.profile.name || "New user";
   const message = state.authMessage ? `<div class="member-toast">${state.authMessage}</div>` : "";
-  const handle = `@${(state.profile.email || "user@intaliq.app").split("@")[0]}`;
-  const city = state.profile.city || "Jeddah";
+  const handle = state.profile.username ? `<bdi>@${state.profile.username}</bdi>` : "";
+  const city = state.profile.city || "Not set";
   const age = profileAge();
   const ageVisible = state.profile.showAge !== "false" && age;
   const nationality = nationalityOptions().find((item) => item.value === state.profile.nationality);
-  const interests = selectedInterests(state.profile.primaryGoal);
+  const interestIcons = selectedInterests(state.profile.primaryGoal).map((item) => interestIcon(item)).join("");
+  const isCoach = state.profile.role === "coach";
   return withTabs("profile", `
     <div class="profile-sketch-screen">
       <button class="member-view-all back-button" data-action="profile-menu">Back</button>
@@ -1932,11 +2082,11 @@ function profileDetailView() {
       <div class="profile-sketch-head">
         ${profileAvatar()}
         <h1>${name}</h1>
-        <p>${handle} <span>|</span> ${city}</p>
+        <p>${[handle, state.profile.city].filter(Boolean).join(" <span>|</span> ")}</p>
       </div>
       <div class="profile-info-grid">
-        <div><strong>${ageVisible ? age : "Hidden"}</strong><span>Age</span></div>
-        <div><strong class="profile-interest-icons">${interests.length ? interests.map((item) => interestIcon(item)).join("") : "—"}</strong><span>Interest</span></div>
+        <div><strong>${ageVisible ? age : age ? "Hidden" : "Not set"}</strong><span>Age</span></div>
+        <div><strong class="profile-interest-icons">${interestIcons || "—"}</strong><span>Interest</span></div>
         <div><strong>${city}</strong><span>City</span></div>
         <div><strong>${nationality ? nationality.flag : "🌐"}</strong><span>${nationality ? nationality.label : "Nationality"}</span></div>
       </div>
@@ -1944,8 +2094,8 @@ function profileDetailView() {
         ${profileSketchRow("◉", "Profile", "view-profile-edit")}
         ${profileSketchRow("◇", "Friends", "find-partners")}
         ${profileSketchRow("✦", "Requests", "requests")}
-        ${profileSketchRow("↗", "My stats", "stats")}
-        ${profileSketchRow("◷", "History", "history")}
+        ${isCoach ? "" : profileSketchRow("↗", "My stats", "stats")}
+        ${isCoach ? "" : profileSketchRow("◷", "History", "history")}
       </div>
     </div>
   `);
@@ -1989,6 +2139,7 @@ function nationalityOptions() {
 }
 
 function profileEditView() {
+  const values = profileFormValues();
   const message = state.authMessage ? `<div class="member-toast">${state.authMessage}</div>` : "";
   const error = state.authError ? `<div class="notice danger-box">${state.authError}</div>` : "";
   return withTabs("profile", `
@@ -2006,35 +2157,232 @@ function profileEditView() {
           <span>Profile picture</span>
           <input name="avatarFile" type="file" accept="image/*" />
         </label>
-        <label class="field"><span>Full name</span><input class="input" name="name" value="${state.profile.name}" required /></label>
-        <label class="field"><span>Email</span><input class="input" name="email" type="email" value="${state.profile.email}" required /></label>
-        <label class="field"><span>Birthdate</span><input class="input" name="birthdate" type="date" value="${state.profile.birthdate}" /></label>
+        <label class="field"><span>Full name</span><input class="input" name="name" value="${values.name}" required /></label>
+        ${usernameField(values.username, "input")}
+        <label class="field"><span>Email</span><input class="input" name="email" type="email" value="${values.email}" required /></label>
+        <label class="field"><span>Birthdate</span><input class="input" name="birthdate" type="date" value="${values.birthdate}" min="${birthdateLimits().min}" max="${birthdateLimits().max}" /></label>
         <label class="toggle-row">
           <input type="hidden" name="showAge" value="false" />
-          <input type="checkbox" name="showAge" value="true" ${state.profile.showAge !== "false" ? "checked" : ""} />
+          <input type="checkbox" name="showAge" value="true" ${values.showAge !== "false" ? "checked" : ""} />
           <span>Display age on profile</span>
         </label>
-        ${interestPicker(state.profile.primaryGoal)}
+        ${interestPicker(values.primaryGoal)}
         <label class="field">
           <span>Location</span>
-          <select class="select" name="city">
-            ${cityOptions().map((city) => `<option value="${city}" ${city === state.profile.city ? "selected" : ""}>${city}</option>`).join("")}
-          </select>
+          ${citySelect("select")}
         </label>
         <label class="field">
           <span>Nationality</span>
-          <select class="select" name="nationality">
-            ${nationalityOptions().map((item) => `<option value="${item.value}" ${item.value === state.profile.nationality ? "selected" : ""}>${item.flag} ${item.label}</option>`).join("")}
-          </select>
+          ${nationalitySelect("select")}
         </label>
-        <input type="hidden" name="role" value="${state.profile.role}" />
-        <input type="hidden" name="fitnessLevel" value="${state.profile.fitnessLevel}" />
-        <input type="hidden" name="specialty" value="${state.profile.specialty}" />
-        <label class="field"><span>New password</span><input class="input" name="password" type="password" minlength="6" placeholder="Leave blank to keep current password" autocomplete="new-password" /></label>
-        <button class="btn btn-primary activity-submit" type="submit">Update Profile</button>
+        <input type="hidden" name="role" value="${values.role}" />
+        <input type="hidden" name="fitnessLevel" value="${values.fitnessLevel}" />
+        <input type="hidden" name="specialty" value="${values.specialty}" />
+        <fieldset class="password-change">
+          <legend>Change password</legend>
+          <p>Leave these blank to keep your current password.</p>
+          <label class="field"><span>Current password</span><input class="input" name="currentPassword" type="password" autocomplete="current-password" /></label>
+          <label class="field"><span>New password</span><input class="input" name="newPassword" type="password" minlength="6" autocomplete="new-password" /></label>
+          <label class="field"><span>Confirm new password</span><input class="input" name="confirmPassword" type="password" minlength="6" autocomplete="new-password" /></label>
+        </fieldset>
+        <button class="btn btn-primary activity-submit" type="submit" ${state.authLoading ? "disabled" : ""}>${state.authLoading ? "Saving..." : "Update Profile"}</button>
       </form>
     </div>
   `);
+}
+
+function profileSetupView() {
+  const values = profileFormValues();
+  const isCoach = values.role === "coach";
+  const error = state.authError ? `<div class="notice danger-box">${state.authError}</div>` : "";
+  return `
+    <div class="auth-screen profile-setup-screen">
+      <button type="button" class="auth-home-link" data-action="signout">Log out</button>
+      <header class="auth-hero">
+        <h1>Complete your profile</h1>
+        <p>Tell people a bit about you. You can change this later.</p>
+      </header>
+      <form class="auth-panel stack" data-form="profile-setup">
+        ${error}
+        <label class="profile-photo-picker">
+          ${profileAvatar()}
+          <span>Add a profile picture (optional)</span>
+          <input name="avatarFile" type="file" accept="image/*" />
+        </label>
+        <label class="field"><span>Full name</span><input class="input auth-input" name="name" value="${escapeHtml(values.name)}" autocomplete="name" required /></label>
+        ${usernameField(values.username, "input auth-input")}
+        <label class="field"><span>Birthdate</span><input class="input auth-input" name="birthdate" type="date" value="${values.birthdate}" min="${birthdateLimits().min}" max="${birthdateLimits().max}" required /></label>
+        <label class="toggle-row">
+          <input type="hidden" name="showAge" value="false" />
+          <input type="checkbox" name="showAge" value="true" ${values.showAge !== "false" ? "checked" : ""} />
+          <span>Display age on profile</span>
+        </label>
+        <label class="field"><span>City</span>${citySelect("select auth-input")}</label>
+        <label class="field"><span>Nationality</span>${nationalitySelect("select auth-input")}</label>
+        ${isCoach ? specialtyPicker(values.specialty) : `
+          ${interestPicker(values.primaryGoal)}
+          <label class="field">
+            <span>Fitness level</span>
+            <select class="select auth-input" name="fitnessLevel">
+              ${["Beginner", "Intermediate", "Advanced"].map((level) => `<option ${level === values.fitnessLevel ? "selected" : ""}>${level}</option>`).join("")}
+            </select>
+          </label>
+        `}
+        <button class="btn btn-primary auth-submit" type="submit" ${state.authLoading ? "disabled" : ""}>${state.authLoading ? "Saving..." : "Save and continue"}</button>
+      </form>
+    </div>
+  `;
+}
+
+// What the profile forms show: the saved profile, plus whatever the user typed
+// before a validation error, so a failed save doesn't wipe their input.
+function profileFormValues() {
+  return { ...state.profile, ...(state.profileDraft || {}) };
+}
+
+function keepProfileDraft(data) {
+  const { currentPassword, newPassword, confirmPassword, password, avatarFile, ...draft } = data;
+  return { ...draft, showAge: draft.showAge === "true" ? "true" : "false" };
+}
+
+function citySelect(className, values = profileFormValues()) {
+  return `
+    <select class="${className}" name="city">
+      <option value="">Choose your city</option>
+      ${cityOptions().map((city) => `<option value="${city}" ${city === values.city ? "selected" : ""}>${city}</option>`).join("")}
+    </select>
+  `;
+}
+
+function nationalitySelect(className, values = profileFormValues()) {
+  return `
+    <select class="${className}" name="nationality">
+      ${nationalityOptions().map((item) => `<option value="${item.value}" ${item.value === values.nationality ? "selected" : ""}>${item.flag} ${item.label}</option>`).join("")}
+    </select>
+  `;
+}
+
+const USERNAME_HINT = "3-20 characters: letters, numbers, dots and underscores.";
+const USERNAME_SETUP_ERROR = "Usernames aren't set up yet. Run supabase/profile-username.sql in Supabase, then try again.";
+let usernameCheckTimer = null;
+
+function usernameField(value, className) {
+  return `
+    <label class="field username-field">
+      <span>Username</span>
+      <input class="${className}" name="username" value="${value}" placeholder="e.g. sara.runs" data-username-input dir="ltr" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="21" required />
+      <small class="username-status" data-username-status aria-live="polite">${USERNAME_HINT}</small>
+    </label>
+  `;
+}
+
+function normalizeUsername(value) {
+  return String(value || "").trim().replace(/^@+/, "").toLowerCase();
+}
+
+function usernameFormatError(username) {
+  if (!username) return "Choose a username.";
+  if (username.length < 3) return "Usernames need at least 3 characters.";
+  if (username.length > 20) return "Usernames can be up to 20 characters.";
+  if (!/^[a-z0-9][a-z0-9._]*$/.test(username)) return "Use only letters, numbers, dots and underscores, starting with a letter or number.";
+  return "";
+}
+
+async function checkUsernameAvailability(username) {
+  if (!supabase) return { error: "Add Supabase environment variables before choosing a username." };
+  const { data, error } = await supabase.rpc("username_available", { candidate: username });
+  // Without supabase/profile-username.sql there's no RPC, so look the name up directly.
+  if (error?.code === "PGRST202") return checkUsernameInProfiles(username);
+  if (error) {
+    console.warn("Unable to check username:", error.message);
+    return { error: "Could not check that username. Please try again." };
+  }
+  return { available: data === true };
+}
+
+async function checkUsernameInProfiles(username) {
+  let query = supabase.from("profiles").select("id").eq("username", username).limit(1);
+  if (state.user) query = query.neq("id", state.user.id);
+  const { data, error } = await query;
+  if (error) {
+    console.warn("Unable to check username:", error.message);
+    return { error: error.code === "42703" ? USERNAME_SETUP_ERROR : "Could not check that username. Please try again." };
+  }
+  return { available: !data.length };
+}
+
+const MIN_AGE = 13;
+const MAX_AGE = 120;
+
+function isoDate(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function birthdateLimits() {
+  const today = new Date();
+  const latest = new Date(today.getFullYear() - MIN_AGE, today.getMonth(), today.getDate());
+  const earliest = new Date(today.getFullYear() - MAX_AGE, today.getMonth(), today.getDate());
+  return { min: isoDate(earliest), max: isoDate(latest) };
+}
+
+// Returns an error message, or "" for an empty (when optional) or valid birthdate.
+function birthdateProblem(value, { required = false } = {}) {
+  if (!value) return required ? "Enter your date of birth." : "";
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  const date = match && new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  if (!date || isoDate(date) !== value) return "Enter a real date of birth.";
+  const { min, max } = birthdateLimits();
+  if (value > isoDate(new Date())) return "Your date of birth can't be in the future.";
+  if (value > max) return `You need to be at least ${MIN_AGE} to use Intaliq.`;
+  if (value < min) return "Enter a real date of birth.";
+  return "";
+}
+
+// Returns an error message, or "" when the username can be saved.
+async function usernameProblem(username) {
+  const formatError = usernameFormatError(username);
+  if (formatError) return formatError;
+  if (username === state.profile.username) return "";
+  const result = await checkUsernameAvailability(username);
+  if (result.error) return result.error;
+  return result.available ? "" : "That username is taken.";
+}
+
+function usernameSaveError(error) {
+  if (error.code === "23505") return "That username is taken.";
+  if (error.code === "42703" || error.code === "PGRST204") return USERNAME_SETUP_ERROR;
+  return error.message;
+}
+
+// Live feedback while typing. Updates the hint in place so the input keeps focus.
+function watchUsernameField() {
+  const input = app.querySelector("[data-username-input]");
+  const status = app.querySelector("[data-username-status]");
+  if (!input || !status) return;
+  const show = (message, tone = "") => {
+    status.textContent = currentLanguage() === "ar" ? translate(message) : message;
+    status.dataset.tone = tone;
+  };
+  input.addEventListener("input", () => {
+    clearTimeout(usernameCheckTimer);
+    const username = normalizeUsername(input.value);
+    const formatError = usernameFormatError(username);
+    if (formatError) {
+      show(formatError, "bad");
+      return;
+    }
+    if (username === state.profile.username) {
+      show("This is your current username.", "ok");
+      return;
+    }
+    show("Checking...");
+    usernameCheckTimer = setTimeout(async () => {
+      const result = await checkUsernameAvailability(username);
+      if (normalizeUsername(input.value) !== username) return;
+      if (result.error) show(result.error, "bad");
+      else show(result.available ? "Username is available." : "That username is taken.", result.available ? "ok" : "bad");
+    }, 400);
+  });
 }
 
 function escapeHtml(value) {
@@ -2211,17 +2559,440 @@ function friendChatView() {
   `);
 }
 
+const SUSPENDED_MESSAGE = "This account has been suspended. Contact intaliqsupport@gmail.com if you think this is a mistake.";
+const ADMIN_SETUP_ERROR = "Admin tools aren't set up yet. Run supabase/admin.sql in Supabase, then try again.";
+const ADMIN_TABS = [
+  ["overview", "Overview"],
+  ["coaches", "Coach applications"],
+  ["users", "Users"],
+  ["sessions", "Sessions"],
+  ["announcements", "Announcements"],
+  ["log", "Activity log"],
+];
+const ADMIN_LOG_LABELS = {
+  set_role: "Changed account type",
+  approve_coach: "Approved coach",
+  reject_coach: "Turned down coach",
+  suspend: "Suspended account",
+  unsuspend: "Restored account",
+  grant_admin: "Made admin",
+  revoke_admin: "Removed admin",
+  delete_session: "Deleted session",
+  post_announcement: "Posted announcement",
+  delete_announcement: "Deleted announcement",
+};
+let suspendedSignOutPending = false;
+
+// Deferred because calling supabase.auth from inside onAuthStateChange can deadlock supabase-js.
+function signOutSuspendedUser() {
+  suspendedSignOutPending = true;
+  setTimeout(() => supabase.auth.signOut(), 0);
+}
+
+function adminDate(value) {
+  if (!value) return "";
+  return new Intl.DateTimeFormat(dateLocale(), { day: "numeric", month: "short", year: "numeric" }).format(new Date(value));
+}
+
+function adminDateTime(value) {
+  if (!value) return "";
+  return new Intl.DateTimeFormat(dateLocale(), { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }).format(new Date(value));
+}
+
+function adminEmpty(title, detail) {
+  return `<div class="member-empty"><strong>${title}</strong><span>${detail}</span></div>`;
+}
+
+function adminView() {
+  const activeTab = state.adminTab || "overview";
+  const message = state.authMessage ? `<div class="member-toast">${state.authMessage}</div>` : "";
+  const error = state.adminError ? `<div class="notice danger-box">${escapeHtml(state.adminError)}</div>` : "";
+  const panels = {
+    overview: adminOverviewPanel,
+    coaches: adminCoachesPanel,
+    users: adminUsersPanel,
+    sessions: adminSessionsPanel,
+    announcements: adminAnnouncementsPanel,
+    log: adminLogPanel,
+  };
+  return withTabs("profile", `
+    <div class="admin-screen">
+      <div class="admin-head">
+        <button class="member-view-all back-button" data-action="profile-menu">Back</button>
+        <button class="member-view-all" data-action="admin-refresh" ${state.adminLoading ? "disabled" : ""}>Refresh</button>
+      </div>
+      <div>
+        <h1>Admin Dashboard</h1>
+        <p>Manage accounts, sessions and announcements across Intaliq.</p>
+      </div>
+      <div class="admin-tabs" role="tablist" aria-label="Admin sections">
+        ${ADMIN_TABS.map(([id, label]) => `
+          <button type="button" role="tab" aria-selected="${activeTab === id}" class="${activeTab === id ? "active" : ""}" data-action="admin-tab" data-tab="${id}">${label}</button>
+        `).join("")}
+      </div>
+      ${message}
+      ${error}
+      ${state.adminLoading ? `<p class="admin-loading">Loading...</p>` : (panels[activeTab] || adminOverviewPanel)()}
+    </div>
+  `);
+}
+
+function adminOverviewPanel() {
+  const overview = state.adminOverview;
+  if (!overview) return state.adminError ? "" : adminEmpty("No numbers yet.", "Tap Refresh to load them.");
+  return `
+    <section class="coach-stat-grid admin-stat-grid" aria-label="Platform stats">
+      ${coachStat("Users", overview.total_users, `+${overview.new_users_7d} this week`)}
+      ${coachStat("Coach applications", overview.coach_applications ?? 0, "")}
+      ${coachStat("Active this week", overview.active_users_7d, "")}
+      ${coachStat("Coaches", overview.coaches, "")}
+      ${coachStat("Members", overview.members, "")}
+      ${coachStat("Sessions", overview.sessions, "")}
+      ${coachStat("Pending requests", overview.pending_requests, "")}
+      ${coachStat("Suspended", overview.suspended, "")}
+    </section>
+    <div class="coach-actions">
+      <button class="coach-action primary" data-action="admin-tab" data-tab="coaches">Review coaches</button>
+      <button class="coach-action primary" data-action="admin-tab" data-tab="users">Manage users</button>
+      <button class="coach-action primary" data-action="admin-tab" data-tab="announcements">Post announcement</button>
+      <button class="coach-action secondary" data-action="admin-tab" data-tab="sessions">Review sessions</button>
+    </div>
+  `;
+}
+
+function adminCoachesPanel() {
+  const applications = state.adminCoachApplications || [];
+  const pending = applications.filter((application) => application.status === "pending");
+  const reviewed = applications.filter((application) => application.status !== "pending");
+  return `
+    <p class="admin-count">${pending.length} waiting for review</p>
+    <div class="admin-list">
+      ${pending.length ? pending.map(adminCoachApplicationCard).join("") : adminEmpty("No applications waiting.", "New coach sign-ups will appear here for review.")}
+    </div>
+    ${reviewed.length ? `
+      <h2 class="admin-subhead">Reviewed in the last 30 days</h2>
+      <div class="admin-list">${reviewed.map(adminCoachApplicationCard).join("")}</div>
+    ` : ""}
+  `;
+}
+
+function adminCoachApplicationCard(application) {
+  const name = escapeHtml(application.full_name || application.email?.split("@")[0] || "Unnamed account");
+  const label = escapeHtml(application.username ? `@${application.username}` : application.email || "this applicant");
+  const specialties = (application.specialty || "").split(",").map((item) => item.trim()).filter(Boolean);
+  const statusPill = {
+    pending: `<span class="pill warn">Pending</span>`,
+    approved: `<span class="pill">Approved</span>`,
+    rejected: `<span class="pill gray">Not approved</span>`,
+    revoked: `<span class="pill gray">Revoked</span>`,
+  }[application.status] || "";
+  return `
+    <article class="coach-request-card admin-card">
+      <div class="admin-card-head">
+        <div>
+          <strong>${name}</strong>
+          <span><bdi>${[application.username ? `@${escapeHtml(application.username)}` : "", escapeHtml(application.email || "")].filter(Boolean).join(" · ")}</bdi></span>
+        </div>
+        <div class="admin-pills">${statusPill}</div>
+      </div>
+      ${specialties.length ? `<div class="admin-pills admin-specialties">${specialties.map((item) => `<span class="pill gray">${escapeHtml(item)}</span>`).join("")}</div>` : `<p class="admin-meta">No specialty given</p>`}
+      ${application.bio ? `<p class="admin-body">${escapeHtml(application.bio)}</p>` : ""}
+      <p class="admin-meta">${[application.city ? escapeHtml(application.city) : "", `Applied ${adminDate(application.created_at)}`].filter(Boolean).join(" · ")}</p>
+      ${application.status === "pending" ? `
+        <div class="admin-card-actions">
+          <button class="coach-mini-action" data-action="admin-confirm" data-kind="approve-coach" data-id="${application.user_id}" data-label="${label}">Approve</button>
+          <button class="coach-mini-action secondary" data-action="admin-confirm" data-kind="reject-coach" data-id="${application.user_id}" data-label="${label}">Turn down</button>
+        </div>
+      ` : `
+        <p class="admin-meta">${adminDate(application.reviewed_at)} · By <bdi>${escapeHtml(application.reviewer_label || "Unknown")}</bdi></p>
+        ${application.review_note ? `<p class="admin-meta">Note: ${escapeHtml(application.review_note)}</p>` : ""}
+      `}
+    </article>
+  `;
+}
+
+function adminUsersPanel() {
+  const users = state.adminUsers || [];
+  return `
+    <form class="admin-search" data-form="admin-user-search" role="search">
+      <input class="input" name="search" type="search" value="${escapeHtml(state.adminSearch || "")}" placeholder="Search name, username or email" aria-label="Search accounts" />
+      <button class="coach-mini-action" type="submit">Search</button>
+    </form>
+    <p class="admin-count">${users.length} account${users.length === 1 ? "" : "s"}</p>
+    <div class="admin-list">
+      ${users.length ? users.map(adminUserCard).join("") : adminEmpty("No accounts found.", state.adminSearch ? "Try a different search." : "New sign-ups will appear here.")}
+    </div>
+  `;
+}
+
+function adminUserCard(user) {
+  const isSelf = user.id === state.user?.id;
+  const name = escapeHtml(user.full_name || user.email?.split("@")[0] || "Unnamed account");
+  const label = escapeHtml(user.username ? `@${user.username}` : user.email || "this account");
+  const isCoach = user.role === "coach";
+  const pills = [
+    `<span class="pill">${isCoach ? "Coach" : "User"}</span>`,
+    user.is_admin ? `<span class="pill admin-pill">Admin</span>` : "",
+    user.is_suspended ? `<span class="pill warn">Suspended</span>` : "",
+    user.email_confirmed ? "" : `<span class="pill gray">Unverified</span>`,
+    user.has_profile ? "" : `<span class="pill gray">No profile yet</span>`,
+    user.coach_status === "pending" ? `<span class="pill warn">Coach applicant</span>` : "",
+  ].join("");
+  const actions = user.has_profile ? `
+    <div class="admin-card-actions">
+      <button class="coach-mini-action secondary" data-action="admin-set-role" data-id="${user.id}" data-role="${isCoach ? "member" : "coach"}">${isCoach ? "Make user" : "Make coach"}</button>
+      ${isSelf ? "" : user.is_suspended
+        ? `<button class="coach-mini-action" data-action="admin-confirm" data-kind="unsuspend" data-id="${user.id}" data-label="${label}">Restore</button>`
+        : `<button class="coach-mini-action danger" data-action="admin-confirm" data-kind="suspend" data-id="${user.id}" data-label="${label}">Suspend</button>`}
+      ${isSelf || user.is_suspended ? "" : user.is_admin
+        ? `<button class="coach-mini-action secondary" data-action="admin-confirm" data-kind="revoke-admin" data-id="${user.id}" data-label="${label}">Remove admin</button>`
+        : `<button class="coach-mini-action secondary" data-action="admin-confirm" data-kind="grant-admin" data-id="${user.id}" data-label="${label}">Make admin</button>`}
+    </div>
+  ` : "";
+  return `
+    <article class="coach-request-card admin-card">
+      <div class="admin-card-head">
+        <div>
+          <strong>${name}${isSelf ? ` <small>(you)</small>` : ""}</strong>
+          <span><bdi>${[user.username ? `@${escapeHtml(user.username)}` : "", escapeHtml(user.email || "")].filter(Boolean).join(" · ")}</bdi></span>
+        </div>
+        <div class="admin-pills">${pills}</div>
+      </div>
+      <p class="admin-meta">Joined ${adminDate(user.created_at)} · ${user.last_sign_in_at ? `Last active ${adminDate(user.last_sign_in_at)}` : "Never signed in"}</p>
+      ${user.is_suspended && user.suspended_reason ? `<p class="admin-meta">Reason: ${escapeHtml(user.suspended_reason)}</p>` : ""}
+      ${actions}
+    </article>
+  `;
+}
+
+function adminSessionsPanel() {
+  const sessions = state.adminSessions || [];
+  return `
+    <p class="admin-count">${sessions.length} session${sessions.length === 1 ? "" : "s"}</p>
+    <div class="admin-list">
+      ${sessions.length ? sessions.map(adminSessionCard).join("") : adminEmpty("No sessions yet.", "Sessions coaches create will appear here.")}
+    </div>
+  `;
+}
+
+function adminSessionCard(row) {
+  const session = row.data || {};
+  const title = escapeHtml(session.title || row.id);
+  const members = Array.isArray(session.members) ? session.members.length : 0;
+  const details = [session.type, session.level, [session.date, session.time].filter(Boolean).join(" ")].filter(Boolean).map(escapeHtml).join(" · ");
+  return `
+    <article class="coach-request-card admin-card">
+      <div class="admin-card-head">
+        <div>
+          <strong>${title}</strong>
+          <span>${details}</span>
+        </div>
+        ${row.pending_requests ? `<div class="admin-pills"><span class="pill warn">${row.pending_requests} pending</span></div>` : ""}
+      </div>
+      <p class="admin-meta">${members + Number(row.approved_requests || 0)} admitted · Created ${adminDate(row.created_at)} · Host: <bdi>${escapeHtml(row.host_label || "Unknown")}</bdi></p>
+      <div class="admin-card-actions">
+        <button class="coach-mini-action danger" data-action="admin-confirm" data-kind="delete-session" data-id="${escapeHtml(row.id)}" data-label="${title}">Delete session</button>
+      </div>
+    </article>
+  `;
+}
+
+function adminAnnouncementsPanel() {
+  const announcements = state.adminAnnouncements || [];
+  return `
+    <form class="coach-request-card admin-announcement-form" data-form="admin-announcement">
+      <h2>New announcement</h2>
+      <p class="admin-meta">Shown to every signed-in user under Events and on their home screen.</p>
+      <label class="field"><span>Title</span><input class="input" name="title" maxlength="80" required /></label>
+      <label class="field"><span>Message</span><textarea class="textarea" name="body" maxlength="1000" required></textarea></label>
+      <button class="btn btn-primary" type="submit">Post to everyone</button>
+    </form>
+    <div class="admin-list">
+      ${announcements.length ? announcements.map((announcement) => `
+        <article class="coach-request-card admin-card">
+          <div class="admin-card-head">
+            <div>
+              <strong>${escapeHtml(announcement.title)}</strong>
+              <span>${adminDateTime(announcement.created_at)}</span>
+            </div>
+          </div>
+          <p class="admin-body">${escapeHtml(announcement.body)}</p>
+          <div class="admin-card-actions">
+            <button class="coach-mini-action danger" data-action="admin-confirm" data-kind="delete-announcement" data-id="${announcement.id}" data-label="${escapeHtml(announcement.title)}">Delete</button>
+          </div>
+        </article>
+      `).join("") : adminEmpty("No announcements yet.", "Posted announcements will appear here.")}
+    </div>
+  `;
+}
+
+function adminLogPanel() {
+  const entries = state.adminLog || [];
+  return `
+    <div class="admin-list">
+      ${entries.length ? entries.map((entry) => {
+        const details = entry.details || {};
+        const extra = [
+          details.from && details.to ? `${details.from} → ${details.to}` : "",
+          details.reason ? `Reason: ${details.reason}` : "",
+        ].filter(Boolean).map(escapeHtml).join(" · ");
+        return `
+          <article class="coach-request-card admin-card admin-log-entry">
+            <strong>${ADMIN_LOG_LABELS[entry.action] || escapeHtml(entry.action)}</strong>
+            <span><bdi>${escapeHtml(entry.target_label || "")}</bdi></span>
+            ${extra ? `<p class="admin-meta">${extra}</p>` : ""}
+            <p class="admin-meta">${adminDateTime(entry.created_at)} · By <bdi>${escapeHtml(entry.admin_label || "Unknown")}</bdi></p>
+          </article>
+        `;
+      }).join("") : adminEmpty("No admin activity yet.", "Every admin action is recorded here.")}
+    </div>
+  `;
+}
+
+function adminConfirmModal() {
+  const confirm = state.adminConfirm;
+  if (!confirm) return "";
+  // dataset un-escapes attribute values, and labels can be other users' session or account names.
+  const label = escapeHtml(confirm.label || "this item");
+  const copy = {
+    suspend: ["Suspend account?", `${label} will be signed out and blocked from signing in until an admin restores the account.`, "Suspend", true],
+    unsuspend: ["Restore account?", `${label} will be able to sign in and use Intaliq again.`, "Restore", false],
+    "grant-admin": ["Make admin?", `${label} will be able to manage every account, session and announcement.`, "Make admin", false],
+    "revoke-admin": ["Remove admin access?", `${label} will go back to a regular account.`, "Remove admin", true],
+    "delete-session": ["Delete session?", `${label} and all of its join requests will be removed for everyone.`, "Delete", true],
+    "delete-announcement": ["Delete announcement?", `${label} will be removed for every user.`, "Delete", true],
+    "approve-coach": ["Approve coach?", `${label} will be able to create sessions and admit members.`, "Approve", false],
+    "reject-coach": ["Turn down application?", `${label} will stay a member and can apply again later.`, "Turn down", true],
+  }[confirm.kind];
+  if (!copy) return "";
+  const [title, body, confirmLabel, destructive] = copy;
+  const reasonLabel = {
+    suspend: "Reason (optional, saved in the activity log)",
+    "delete-session": "Reason (optional, saved in the activity log)",
+    "reject-coach": "Note to the applicant (optional, they'll see it)",
+  }[confirm.kind];
+  return `
+    <div class="confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="admin-confirm-title">
+      <form class="confirm-dialog" data-form="admin-confirm">
+        <h2 id="admin-confirm-title">${title}</h2>
+        <p>${body}</p>
+        ${reasonLabel ? `<label class="field"><span>${reasonLabel}</span><textarea class="textarea" name="reason" maxlength="300"></textarea></label>` : ""}
+        <input type="hidden" name="kind" value="${escapeHtml(confirm.kind)}" />
+        <input type="hidden" name="id" value="${escapeHtml(confirm.id)}" />
+        <div class="confirm-actions">
+          <button class="btn btn-ghost" type="button" data-action="cancel-admin-confirm">Cancel</button>
+          <button class="btn ${destructive ? "btn-danger" : "btn-primary"}" type="submit">${confirmLabel}</button>
+        </div>
+      </form>
+    </div>
+  `;
+}
+
+function adminErrorMessage(error) {
+  // Missing function or table: admin.sql hasn't been run yet.
+  if (["PGRST202", "PGRST205", "42883", "42P01"].includes(error?.code)) return ADMIN_SETUP_ERROR;
+  return error?.message || "Something went wrong. Please try again.";
+}
+
+const ADMIN_LOADERS = {
+  overview: async () => {
+    const { data, error } = await supabase.rpc("admin_overview");
+    return { error, patch: { adminOverview: data } };
+  },
+  users: async () => {
+    const { data, error } = await supabase.rpc("admin_list_users", { p_search: state.adminSearch || null });
+    return { error, patch: { adminUsers: data || [] } };
+  },
+  sessions: async () => {
+    const { data, error } = await supabase.rpc("admin_list_sessions");
+    return { error, patch: { adminSessions: data || [] } };
+  },
+  announcements: async () => {
+    const { data, error } = await supabase
+      .from("app_announcements")
+      .select("id, title, body, created_at")
+      .order("created_at", { ascending: false })
+      .limit(50);
+    // Keep the admin's own Events and home screens in step with what they just posted.
+    return { error, patch: { adminAnnouncements: data || [], platformAnnouncements: (data || []).slice(0, 20) } };
+  },
+  coaches: async () => {
+    const { data, error } = await supabase.rpc("admin_list_coach_applications");
+    return { error, patch: { adminCoachApplications: data || [] } };
+  },
+  log: async () => {
+    const { data, error } = await supabase.rpc("admin_list_audit_log", { p_limit: 100 });
+    return { error, patch: { adminLog: data || [] } };
+  },
+};
+
+async function openAdmin(tab = "overview") {
+  const adminTab = ADMIN_LOADERS[tab] ? tab : "overview";
+  setState({ route: "admin", adminTab, adminLoading: true, adminError: "", adminConfirm: null, authError: "", authMessage: "" });
+  await loadAdminTab(adminTab);
+}
+
+async function loadAdminTab(tab) {
+  if (!supabase || !state.user) {
+    setState({ adminLoading: false, adminError: "Sign in first so Intaliq can load admin tools." });
+    return;
+  }
+  const { error, patch } = await ADMIN_LOADERS[tab]();
+  // Ignore results for a tab the admin has already left.
+  if (state.route !== "admin" || state.adminTab !== tab) return;
+  setState({ ...(error ? {} : patch), adminLoading: false, adminError: error ? adminErrorMessage(error) : "" });
+}
+
+async function runAdminAction(rpcName, params, successMessage) {
+  if (!supabase || !state.user) return false;
+  setState({ adminLoading: true, adminConfirm: null, adminError: "", authMessage: "" });
+  const { error } = await supabase.rpc(rpcName, params);
+  if (error) {
+    setState({ adminLoading: false, adminError: adminErrorMessage(error) });
+    return false;
+  }
+  state.authMessage = successMessage;
+  await loadAdminTab(state.adminTab);
+  return true;
+}
+
+async function confirmAdminAction({ kind, id, reason = "" }) {
+  const note = reason.trim() || null;
+  const actions = {
+    suspend: () => runAdminAction("admin_set_suspended", { p_user: id, p_suspended: true, p_reason: note }, "Account suspended."),
+    unsuspend: () => runAdminAction("admin_set_suspended", { p_user: id, p_suspended: false, p_reason: null }, "Account restored."),
+    "grant-admin": () => runAdminAction("admin_set_admin", { p_user: id, p_is_admin: true }, "Admin access granted."),
+    "revoke-admin": () => runAdminAction("admin_set_admin", { p_user: id, p_is_admin: false }, "Admin access removed."),
+    "delete-session": async () => {
+      const deleted = await runAdminAction("admin_delete_session", { p_session: id, p_reason: note }, "Session deleted.");
+      if (deleted) {
+        state.sessions = state.sessions.filter((session) => session.id !== id);
+        state.joinedSessions = state.joinedSessions.filter((sessionId) => sessionId !== id);
+        saveState();
+      }
+    },
+    "delete-announcement": () => runAdminAction("admin_delete_announcement", { p_announcement: id }, "Announcement deleted."),
+    "approve-coach": () => runAdminAction("admin_review_coach", { p_user: id, p_approve: true, p_note: null }, "Coach approved."),
+    "reject-coach": () => runAdminAction("admin_review_coach", { p_user: id, p_approve: false, p_note: note }, "Application turned down."),
+  };
+  await actions[kind]?.();
+}
+
 function page(title, subtitle, body) {
   return `
-    <div class="topbar">
-      <button class="btn-link" data-action="back">Back</button>
-    </div>
-    <div class="stack">
-      <div>
-        <h1 class="page-title">${title}</h1>
-        <p class="subtle">${subtitle}</p>
+    <div class="page-screen">
+      <div class="page-card">
+        <div class="topbar">
+          <button class="btn-link" data-action="back">Back</button>
+        </div>
+        <div class="stack">
+          <div>
+            <h1 class="page-title">${title}</h1>
+            <p class="subtle">${subtitle}</p>
+          </div>
+          ${body}
+        </div>
       </div>
-      ${body}
     </div>
   `;
 }
@@ -2388,11 +3159,13 @@ function sessionCard(session) {
       <div class="subtle">${members.length}/${session.capacity} people · ${session.level || "All levels"} · ${session.admission || "Open"}</div>
       ${state.profile.role === "coach"
         ? accessibility ? `<div class="accessibility-badge">${accessibility === "Wheelchair-Friendly" ? "♿ " : ""}${accessibility}</div>` : ""
-        : `<div class="accessibility-row"><span>Accessibility</span><strong>${accessibility ? `${accessibility === "Wheelchair-Friendly" ? "♿ " : ""}${accessibility}` : ""}</strong></div>`}
+        : `<div class="accessibility-row"><span>Accessibility</span><strong>${accessibility ? `${accessibility === "Wheelchair-Friendly" ? "♿ " : ""}${accessibility}` : "None"}</strong></div>`}
       ${state.profile.role === "coach" && pending ? `<div class="notice">${pending} admission request${pending === 1 ? "" : "s"} waiting</div>` : ""}
       <div class="grid-2">
         <button class="btn btn-ghost" data-action="session-detail" data-id="${session.id}">Details</button>
-        ${joined
+        ${state.profile.role === "coach" && isOwnSession(session)
+          ? `<button class="btn btn-primary" data-action="session-detail" data-id="${session.id}">Manage</button>`
+          : joined
           ? `<button class="btn btn-dark" data-action="session-detail" data-id="${session.id}">Open</button>`
           : requestPending
             ? `<button class="btn btn-dark" data-action="session-detail" data-id="${session.id}">Pending</button>`
@@ -2474,6 +3247,8 @@ function bindEvents() {
   app.querySelectorAll("[data-route]").forEach((element) => {
     element.addEventListener("click", () => navigate(element.dataset.route));
   });
+
+  watchUsernameField();
 
   app.querySelectorAll("[data-action]").forEach((element) => {
     element.addEventListener("click", () => handleAction(element.dataset.action, element.dataset));
@@ -2562,6 +3337,13 @@ function handleAction(action, data = {}) {
     signout: () => setState({ confirmSignOut: true }),
     "cancel-signout": () => setState({ confirmSignOut: false }),
     "confirm-signout": () => signOut(),
+    "open-admin": () => openAdmin("overview"),
+    "admin-tab": () => openAdmin(data.tab),
+    "admin-refresh": () => openAdmin(state.adminTab),
+    "admin-set-role": () => runAdminAction("admin_set_role", { p_user: data.id, p_role: data.role }, data.role === "coach" ? "Account changed to coach." : "Account changed to user."),
+    "admin-confirm": () => setState({ adminConfirm: { kind: data.kind, id: data.id, label: data.label }, authMessage: "" }),
+    "cancel-admin-confirm": () => setState({ adminConfirm: null }),
+    "reapply-coach": () => reapplyAsCoach(),
   };
 
   actions[action]?.();
@@ -2580,6 +3362,22 @@ async function handleForm(type, data) {
 
   if (type === "verify-email") {
     await verifyEmailCode(data);
+    return;
+  }
+
+  if (type === "admin-user-search") {
+    state.adminSearch = (data.search || "").trim();
+    await openAdmin("users");
+    return;
+  }
+
+  if (type === "admin-announcement") {
+    await runAdminAction("admin_post_announcement", { p_title: data.title.trim(), p_body: data.body.trim() }, "Announcement posted.");
+    return;
+  }
+
+  if (type === "admin-confirm") {
+    await confirmAdminAction(data);
     return;
   }
 
@@ -2640,6 +3438,10 @@ async function handleForm(type, data) {
     await updateProfile(data);
   }
 
+  if (type === "profile-setup") {
+    await saveProfileSetup(data);
+  }
+
   if (type === "announcement") {
     addAnnouncement(data.sessionId, data.announcement, data.subject);
   }
@@ -2698,7 +3500,7 @@ async function handleAuth(data) {
     : await supabase.auth.signInWithPassword(credentials);
 
   if (response.error) {
-    setState({ authLoading: false, authError: response.error.message, authMessage: "" });
+    setState({ authLoading: false, authError: authErrorMessage(response.error), authMessage: "" });
     return;
   }
 
@@ -2725,6 +3527,10 @@ async function handleAuth(data) {
     const verifiedUser = response.data.user;
     const verifiedProfile = await profileWithDatabaseRole(verifiedUser);
     await supabase.auth.signOut();
+    if (verifiedProfile?.isSuspended) {
+      setState({ authLoading: false, authError: SUSPENDED_MESSAGE, authMessage: "" });
+      return;
+    }
     await sendEmailOtp(
       emailResult.email,
       {
@@ -2739,6 +3545,18 @@ async function handleAuth(data) {
   }
 
   setState({ authLoading: false, authError: "Unable to continue. Please try again.", authMessage: "" });
+}
+
+const EMAIL_RATE_LIMIT_MESSAGE = "Too many emails were sent recently. Please wait a few minutes and try again.";
+const RESEND_COOLDOWN_MESSAGE = "Please wait a minute before requesting another code.";
+
+// Supabase returns raw rate-limit errors ("email rate limit exceeded",
+// "For security purposes, you can only request this after 42 seconds.").
+function authErrorMessage(error) {
+  const message = error?.message || "";
+  if (error?.status === 429 || /rate limit/i.test(message)) return EMAIL_RATE_LIMIT_MESSAGE;
+  if (/only request this after/i.test(message)) return RESEND_COOLDOWN_MESSAGE;
+  return message || "Unable to continue. Please try again.";
 }
 
 async function sendEmailOtp(email, details = {}) {
@@ -2780,7 +3598,7 @@ async function sendEmailOtp(email, details = {}) {
       });
       return;
     }
-    setState({ authLoading: false, authError: error.message, authMessage: "" });
+    setState({ authLoading: false, authError: authErrorMessage(error), authMessage: "" });
     return;
   }
 
@@ -2887,61 +3705,193 @@ async function signOut() {
   setState({ user: null, route: "signin", authMode: "signin", confirmSignOut: false, authError: "", authMessage: "Signed out." });
 }
 
+function profileMetadata(profile) {
+  return {
+    name: profile.name,
+    username: profile.username,
+    role: profile.role,
+    fitnessLevel: profile.fitnessLevel,
+    primaryGoal: profile.primaryGoal,
+    specialty: profile.specialty,
+    age: profile.age,
+    showAge: profile.showAge,
+    birthdate: profile.birthdate,
+    city: profile.city,
+    nationality: profile.nationality,
+    avatarUrl: profile.avatarUrl,
+    bio: profile.bio,
+  };
+}
+
+// Claims the username in the profiles table first (its unique index is the
+// final word on availability), then saves everything to the auth account.
+async function saveAccount(profile, extraUpdate = {}) {
+  if (!supabase || !state.user) return "";
+  const profileError = await syncPublicProfile(profile);
+  if (profileError) return usernameSaveError(profileError);
+  const { error } = await supabase.auth.updateUser({ ...extraUpdate, data: profileMetadata(profile) });
+  return error ? error.message : "";
+}
+
+function passwordChangeProblem(currentPassword, newPassword, confirmPassword) {
+  if (!currentPassword && !newPassword && !confirmPassword) return "";
+  if (!currentPassword) return "Enter your current password to change it.";
+  if (newPassword.length < 6) return "New password must be at least 6 characters.";
+  if (newPassword !== confirmPassword) return "New passwords do not match.";
+  if (newPassword === currentPassword) return "Choose a new password that's different from your current one.";
+  return "";
+}
+
+// Checks the current password on a throwaway client so the signed-in session
+// (and its auth listeners) are left alone.
+async function currentPasswordMatches(password) {
+  const checker = createClient(supabaseUrl, supabaseAnonKey, {
+    auth: { persistSession: false, autoRefreshToken: false, storageKey: "intaliq-password-check" },
+  });
+  const { error } = await checker.auth.signInWithPassword({ email: state.profile.email, password });
+  if (!error) await checker.auth.signOut({ scope: "local" });
+  return !error;
+}
+
 async function updateProfile(data) {
-  const password = data.password?.trim();
-  const profileData = { ...data };
-  delete profileData.password;
+  const draft = keepProfileDraft(data);
+  if (state.authLoading) return;
+  const { currentPassword = "", newPassword = "", confirmPassword = "", ...profileData } = data;
+  const username = normalizeUsername(profileData.username ?? state.profile.username);
   const nextProfile = {
     ...state.profile,
     ...profileData,
-    age: profileAge({ ...state.profile, ...profileData }),
+    username,
     showAge: profileData.showAge === "true" ? "true" : "false",
     birthdate: profileData.birthdate || "",
-    city: profileData.city || "Jeddah",
+    city: profileData.city || "",
     nationality: profileData.nationality || "",
     avatarUrl: profileData.avatarUrl || state.profile.avatarUrl || "",
   };
+  nextProfile.age = profileAge(nextProfile);
+  const emailChanged = nextProfile.email !== state.profile.email;
+
+  const birthdateError = birthdateProblem(nextProfile.birthdate);
+  if (birthdateError) {
+    setState({ profileDraft: draft, authError: birthdateError, authMessage: "" });
+    return;
+  }
+
+  const passwordError = passwordChangeProblem(currentPassword, newPassword, confirmPassword);
+  if (passwordError) {
+    setState({ profileDraft: draft, authError: passwordError, authMessage: "" });
+    return;
+  }
+
+  setState({ authLoading: true, authError: "", authMessage: "" });
+  const usernameError = await usernameProblem(username);
+  if (usernameError) {
+    setState({ profileDraft: draft, authLoading: false, authError: usernameError });
+    return;
+  }
+
   if (supabase && state.user) {
-    const update = {
-      data: {
-        name: nextProfile.name,
-        role: nextProfile.role,
-        fitnessLevel: nextProfile.fitnessLevel,
-        primaryGoal: nextProfile.primaryGoal,
-        specialty: nextProfile.specialty,
-        age: nextProfile.age,
-        showAge: nextProfile.showAge,
-        birthdate: nextProfile.birthdate,
-        city: nextProfile.city,
-        nationality: nextProfile.nationality,
-        avatarUrl: nextProfile.avatarUrl,
-        bio: nextProfile.bio,
-      },
-    };
-
-    if (nextProfile.email !== state.profile.email) {
-      update.email = nextProfile.email;
+    if (newPassword && !(await currentPasswordMatches(currentPassword))) {
+      setState({ profileDraft: draft, authLoading: false, authError: "Your current password is incorrect." });
+      return;
     }
-
-    if (password) {
-      update.password = password;
-    }
-
-    const { error } = await supabase.auth.updateUser(update);
-    if (error) {
-      setState({ authError: error.message });
+    const extraUpdate = {};
+    if (emailChanged) extraUpdate.email = nextProfile.email;
+    if (newPassword) extraUpdate.password = newPassword;
+    const saveError = await saveAccount(nextProfile, extraUpdate);
+    if (saveError) {
+      setState({ profileDraft: draft, authLoading: false, authError: saveError });
       return;
     }
   }
 
-  await syncPublicProfile(nextProfile);
-
   setState({
     profile: nextProfile,
+    profileDraft: null,
     route: nextProfile.role === "coach" ? "profile" : "profile-detail",
+    authLoading: false,
     authError: "",
-    authMessage: nextProfile.email !== state.profile.email ? "Profile saved. Check your inbox to confirm the new email address." : "Profile saved.",
+    authMessage: emailChanged
+      ? "Profile saved. Check your inbox to confirm the new email address."
+      : newPassword ? "Profile saved and password changed." : "Profile saved.",
   });
+}
+
+async function saveProfileSetup(data) {
+  const draft = keepProfileDraft(data);
+  if (state.authLoading) return;
+  const isCoach = state.profile.role === "coach";
+  const name = (data.name || "").trim();
+  const username = normalizeUsername(data.username);
+
+  if (!name) {
+    setState({ profileDraft: draft, authError: "Enter your full name." });
+    return;
+  }
+  const birthdateError = birthdateProblem(data.birthdate, { required: true });
+  if (birthdateError) {
+    setState({ profileDraft: draft, authError: birthdateError });
+    return;
+  }
+  if (isCoach && !data.specialty) {
+    setState({ profileDraft: draft, authError: "Tell us your coaching specialty." });
+    return;
+  }
+  if (!isCoach && !data.primaryGoal) {
+    setState({ profileDraft: draft, authError: "Choose at least one fitness interest." });
+    return;
+  }
+
+  setState({ authLoading: true, authError: "" });
+  const usernameError = await usernameProblem(username);
+  if (usernameError) {
+    setState({ profileDraft: draft, authLoading: false, authError: usernameError });
+    return;
+  }
+
+  const nextProfile = {
+    ...state.profile,
+    name,
+    username,
+    birthdate: data.birthdate || "",
+    showAge: data.showAge === "true" ? "true" : "false",
+    city: data.city || "",
+    nationality: data.nationality || "",
+    avatarUrl: data.avatarUrl || state.profile.avatarUrl || "",
+    primaryGoal: isCoach ? state.profile.primaryGoal : data.primaryGoal,
+    specialty: isCoach ? data.specialty : state.profile.specialty,
+    fitnessLevel: isCoach ? state.profile.fitnessLevel : data.fitnessLevel || state.profile.fitnessLevel,
+  };
+  nextProfile.age = profileAge(nextProfile);
+
+  const saveError = await saveAccount(nextProfile);
+  if (saveError) {
+    setState({ profileDraft: draft, authLoading: false, authError: saveError });
+    return;
+  }
+
+  // A coach sign-up is saved as a member with a pending application, so take the role from the database.
+  const savedProfile = { ...nextProfile, ...(await savedRoleAndReview()) };
+  setState({ profile: savedProfile, profileDraft: null, route: routeForProfile(savedProfile), authLoading: false, authError: "", authMessage: "" });
+}
+
+async function savedRoleAndReview() {
+  if (!supabase || !state.user) return {};
+  const [{ data }, coachReview] = await Promise.all([
+    supabase.from("profiles").select("role").eq("id", state.user.id).maybeSingle(),
+    loadCoachReview(state.user.id),
+  ]);
+  return data?.role ? { role: accountRole({ role: data.role }), ...coachReview } : coachReview;
+}
+
+async function reapplyAsCoach() {
+  if (!supabase || !state.user) return;
+  const { error } = await supabase.rpc("apply_as_coach");
+  if (error) {
+    setState({ authError: error.message, authMessage: "" });
+    return;
+  }
+  setState({ profile: { ...state.profile, ...(await loadCoachReview(state.user.id)) }, authError: "", authMessage: "Application sent. We'll review it soon." });
 }
 
 async function joinSession(id) {
@@ -3092,11 +4042,12 @@ async function loadPartnerDirectory() {
     return;
   }
 
-  setState({ partnerDirectory: (data || []).map(normalizePartnerProfile), partnerDirectoryLoading: false, partnerDirectoryError: "" });
+  const visibleProfiles = (data || []).filter((profile) => !profile.is_suspended);
+  setState({ partnerDirectory: visibleProfiles.map(normalizePartnerProfile), partnerDirectoryLoading: false, partnerDirectoryError: "" });
 }
 
 async function syncPublicProfile(profile = state.profile) {
-  if (!supabase || !state.user) return;
+  if (!supabase || !state.user) return null;
   const payload = {
     id: state.user.id,
     full_name: profile.name,
@@ -3105,8 +4056,12 @@ async function syncPublicProfile(profile = state.profile) {
     specialty: profile.specialty,
     updated_at: new Date().toISOString(),
   };
+  // Only sent once chosen, so profiles without the username column keep syncing.
+  if (profile.username) payload.username = profile.username;
 
-  await supabase.from("profiles").upsert(payload);
+  const { error } = await supabase.from("profiles").upsert(payload);
+  if (error) console.warn("Unable to save public profile:", error.message);
+  return error;
 }
 
 function connectPartner(name) {
@@ -3165,12 +4120,19 @@ async function initAuth() {
   }
 
   const { data, error } = await supabase.auth.getSession();
-  const user = data.session?.user || null;
-  const hydratedProfile = await profileWithDatabaseRole(user);
+  const sessionUser = data.session?.user || null;
+  const hydratedProfile = await profileWithDatabaseRole(sessionUser);
+  const suspended = Boolean(sessionUser && hydratedProfile?.isSuspended);
+  const user = suspended ? null : sessionUser;
   state = loadState(user);
   state.confirmSignOut = false;
   state.futureFeatureMessage = "";
-  if (!user) {
+  if (suspended) {
+    signOutSuspendedUser();
+    state.route = "signin";
+    state.authMode = "signin";
+    state.authError = SUSPENDED_MESSAGE;
+  } else if (!user) {
     state.route = "landing";
     state.authMode = "signin";
   } else {
@@ -3186,9 +4148,16 @@ async function initAuth() {
   authReady = true;
   render();
 
-  supabase.auth.onAuthStateChange(async (_event, session) => {
+  supabase.auth.onAuthStateChange(async (event, session) => {
     const userFromSession = session?.user || null;
+    // Profile saves and token refreshes are already reflected in state; reloading
+    // here would race the save and drop its confirmation message.
+    if ((event === "USER_UPDATED" || event === "TOKEN_REFRESHED") && userFromSession?.id === state.user?.id) return;
     const nextProfile = await profileWithDatabaseRole(userFromSession);
+    if (userFromSession && nextProfile?.isSuspended) {
+      signOutSuspendedUser();
+      return;
+    }
     const previousRoute = state.route;
     state = loadState(userFromSession);
     state.confirmSignOut = false;
@@ -3200,6 +4169,12 @@ async function initAuth() {
     } else {
       // Keep visitors where they are in the sign-in flow instead of forcing the login page.
       state.route = ["landing", "signin", "verify"].includes(previousRoute) ? previousRoute : "landing";
+      if (suspendedSignOutPending) {
+        suspendedSignOutPending = false;
+        state.route = "signin";
+        state.authMode = "signin";
+        state.authError = SUSPENDED_MESSAGE;
+      }
     }
     render();
   });

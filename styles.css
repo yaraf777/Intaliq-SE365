@@ -37,12 +37,22 @@
 
 :root:not([data-theme="light"]) {
   color-scheme: dark;
+  /* Dark versions of the base palette, so older components follow the theme too */
+  --ink: #f1f3ee;
+  --muted: #a9b0a7;
+  --line: rgba(255, 255, 255, 0.14);
+  --paper: #0b0c0b;
+  --panel: #2a2b2a;
+  --accent-dark: #c7ff4f;
+  --accent-soft: rgba(199, 255, 79, 0.14);
+  --shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
 }
 
 :root[data-theme="light"] .auth-screen,
 :root[data-theme="light"] .landing-screen,
 :root[data-theme="light"] .member-tabs-shell,
-:root[data-theme="light"] .coach-tabs-shell {
+:root[data-theme="light"] .coach-tabs-shell,
+:root[data-theme="light"] .page-screen {
   background:
     radial-gradient(circle at 52% 6%, rgba(136, 196, 61, 0.22), transparent 34%),
     linear-gradient(180deg, var(--paper) 0%, #ecefe6 100%);
@@ -238,6 +248,11 @@ button {
   color: var(--text, #fff);
   font-size: 16px;
   font-weight: 700;
+}
+
+.input::placeholder,
+.textarea::placeholder {
+  color: rgba(var(--text-rgb, 255, 255, 255), 0.5);
 }
 
 .auth-input::placeholder {
@@ -439,6 +454,17 @@ button {
 .stack {
   display: grid;
   gap: 12px;
+}
+
+.page-screen {
+  /* Fill the screen edge to edge, like the tabbed views, so the background matches */
+  height: calc(100% + 36px);
+  margin: -18px calc(-1 * var(--gutter));
+  padding: 18px var(--gutter);
+  overflow-y: auto;
+  background:
+    radial-gradient(circle at 52% 10%, rgba(255, 255, 255, 0.32), transparent 24%),
+    linear-gradient(180deg, #7b7d7a 0%, #535452 42%, #050505 100%);
 }
 
 .topbar {
@@ -720,7 +746,7 @@ button {
 
 .member-action.ghost {
   background: transparent;
-  color: rgba(var(--text-rgb, 255, 255, 255), 0.36);
+  color: rgba(var(--text-rgb, 255, 255, 255), 0.82);
 }
 
 .member-action.ghost > span:first-child,
@@ -1109,6 +1135,8 @@ button {
 .stat-chart span {
   height: 100%;
   display: grid;
+  /* Bar area takes the free height so bars grow up from the baseline */
+  grid-template-rows: minmax(0, 1fr) auto;
   align-items: end;
   justify-items: center;
   gap: 8px;
@@ -1121,7 +1149,6 @@ button {
   width: 100%;
   max-width: 68px;
   height: var(--height);
-  min-height: 8px;
   border-radius: 8px 8px 0 0;
   display: block;
   background: var(--lime, #c7ff4f);
@@ -3057,6 +3084,267 @@ button {
   line-height: 1.2;
 }
 
+/*
+  Dark mode for components that were drawn with light colors.
+  :where() adds no specificity, so screen-specific rules (auth panel, landing) still win.
+*/
+:where(:root:not([data-theme="light"])) .card,
+:where(:root:not([data-theme="light"])) .session-card,
+:where(:root:not([data-theme="light"])) .goal-card,
+:where(:root:not([data-theme="light"])) .metric,
+:where(:root:not([data-theme="light"])) .role-card,
+:where(:root:not([data-theme="light"])) .friend-row,
+:where(:root:not([data-theme="light"])) .partner-card,
+:where(:root:not([data-theme="light"])) .partner-request-card {
+  border-color: var(--line);
+  background: rgba(96, 96, 96, 0.72);
+  color: #fff;
+}
+
+:where(:root:not([data-theme="light"])) .friend-row strong,
+:where(:root:not([data-theme="light"])) .friend-row-static strong,
+:where(:root:not([data-theme="light"])) .friend-row b {
+  color: #fff;
+}
+
+:where(:root:not([data-theme="light"])) .friend-row small,
+:where(:root:not([data-theme="light"])) .friend-row-static small,
+:where(:root:not([data-theme="light"])) .partner-interest-line span,
+:where(:root:not([data-theme="light"])) .confirm-dialog p {
+  color: rgba(255, 255, 255, 0.66);
+}
+
+:where(:root:not([data-theme="light"])) .partner-interest-line,
+:where(:root:not([data-theme="light"])) .accessibility-row,
+:where(:root:not([data-theme="light"])) .accessibility-row strong,
+:where(:root:not([data-theme="light"])) .booked-session-card em {
+  color: #d9ff9a;
+}
+
+:where(:root:not([data-theme="light"])) .booked-session-card em {
+  background: rgba(199, 255, 79, 0.16);
+}
+
+:where(:root:not([data-theme="light"])) .input,
+:where(:root:not([data-theme="light"])) .textarea,
+:where(:root:not([data-theme="light"])) .select {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 0, 0.3);
+  color: #fff;
+}
+
+:where(:root:not([data-theme="light"])) .field span {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+:where(:root:not([data-theme="light"])) .btn-ghost,
+:where(:root:not([data-theme="light"])) .icon-btn,
+:where(:root:not([data-theme="light"])) .segmented button.active {
+  border-color: rgba(255, 255, 255, 0.24);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+:where(:root:not([data-theme="light"])) .segmented,
+:where(:root:not([data-theme="light"])) .progress,
+:where(:root:not([data-theme="light"])) .avatar {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+:where(:root:not([data-theme="light"])) .checkpoint {
+  background: rgba(0, 0, 0, 0.22);
+}
+
+:where(:root:not([data-theme="light"])) .checkpoint.done {
+  border-color: rgba(199, 255, 79, 0.4);
+}
+
+:where(:root:not([data-theme="light"])) .empty {
+  border-color: rgba(255, 255, 255, 0.24);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+:where(:root:not([data-theme="light"])) .pill.warn {
+  background: rgba(245, 185, 66, 0.18);
+  color: #ffd27a;
+}
+
+:where(:root:not([data-theme="light"])) .pill.gray {
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.75);
+}
+
+:where(:root:not([data-theme="light"])) .notice {
+  border-color: rgba(199, 255, 79, 0.4);
+  color: #d9ff9a;
+}
+
+:where(:root:not([data-theme="light"])) .danger-box {
+  border-color: rgba(239, 140, 125, 0.5);
+  background: rgba(207, 77, 63, 0.18);
+  color: #ffb4a8;
+}
+
+:where(:root:not([data-theme="light"])) .confirm-dialog {
+  background: rgba(42, 43, 42, 0.98);
+  color: #fff;
+}
+
+:where(:root:not([data-theme="light"])) .tabs,
+:where(:root:not([data-theme="light"])) .status-bar {
+  background: #1a1b1a;
+}
+
+.username-status {
+  color: rgba(var(--text-rgb, 255, 255, 255), 0.62);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.username-status[data-tone="ok"] {
+  color: var(--lime-text, #c7ff4f);
+}
+
+.username-status[data-tone="bad"] {
+  color: #ff8a7a;
+}
+
+:root[data-theme="light"] .username-status[data-tone="bad"] {
+  color: var(--danger);
+}
+
+.password-change {
+  min-width: 0;
+  margin: 4px 0 0;
+  padding: 14px 0 0;
+  border: 0;
+  border-top: 1px solid rgba(var(--text-rgb, 255, 255, 255), 0.16);
+  display: grid;
+  gap: 12px;
+}
+
+.password-change legend {
+  padding: 0;
+  color: var(--text, #fff);
+  font-size: 17px;
+  font-weight: 900;
+}
+
+.password-change > p {
+  margin: -4px 0 0;
+  color: rgba(var(--text-rgb, 255, 255, 255), 0.62);
+  font-size: 13px;
+}
+
+.profile-setup-screen .profile-photo-picker {
+  padding: 12px;
+}
+
+.profile-setup-screen .profile-photo-picker .profile-user-icon {
+  width: 88px;
+  height: 88px;
+}
+
+:where(:root:not([data-theme="light"])) .coach-session-title h3,
+:where(:root:not([data-theme="light"])) .profile-sketch-head h1,
+:where(:root:not([data-theme="light"])) .profile-sketch-head p span {
+  color: #fff;
+}
+
+:where(:root:not([data-theme="light"])) .profile-sketch-head p {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+:where(:root:not([data-theme="light"])) .event-filter-tabs {
+  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+:where(:root:not([data-theme="light"])) .event-filter-tabs button {
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+
+:where(:root:not([data-theme="light"])) .event-filter-tabs button.active {
+  color: #050505;
+}
+
+:where(:root:not([data-theme="light"])) .more-menu-row,
+:where(:root:not([data-theme="light"])) .profile-sketch-row {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(96, 96, 96, 0.72);
+  color: #fff;
+}
+
+:where(:root:not([data-theme="light"])) .more-row-icon,
+:where(:root:not([data-theme="light"])) .profile-sketch-row > span,
+:where(:root:not([data-theme="light"])) .more-menu-row > span:nth-child(2),
+:where(:root:not([data-theme="light"])) .profile-sketch-row strong,
+:where(:root:not([data-theme="light"])) .more-menu-row strong,
+:where(:root:not([data-theme="light"])) .profile-sketch-row b {
+  color: #fff;
+}
+
+:where(:root:not([data-theme="light"])) .profile-user-icon {
+  border-color: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+:where(:root:not([data-theme="light"])) .profile-user-icon span,
+:where(:root:not([data-theme="light"])) .profile-user-icon strong {
+  background: rgba(255, 255, 255, 0.85);
+}
+
+:where(:root:not([data-theme="light"])) .profile-stat-strip,
+:where(:root:not([data-theme="light"])) .profile-info-grid,
+:where(:root:not([data-theme="light"])) .profile-stat-strip div,
+:where(:root:not([data-theme="light"])) .profile-info-grid div {
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+:where(:root:not([data-theme="light"])) .profile-stat-strip,
+:where(:root:not([data-theme="light"])) .profile-info-grid {
+  background: rgba(96, 96, 96, 0.72);
+}
+
+:where(:root:not([data-theme="light"])) .profile-stat-strip strong,
+:where(:root:not([data-theme="light"])) .profile-info-grid strong,
+:where(:root:not([data-theme="light"])) .profile-stat-strip span,
+:where(:root:not([data-theme="light"])) .profile-info-grid span {
+  color: #fff;
+}
+
+:where(:root:not([data-theme="light"])) .stats-period-tabs,
+:where(:root:not([data-theme="light"])) .history-tabs {
+  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+:where(:root:not([data-theme="light"])) .stats-period-tabs button:not(.active),
+:where(:root:not([data-theme="light"])) .history-tabs button:not(.active) {
+  color: #fff;
+}
+
+:where(:root:not([data-theme="light"])) .partner-search .input {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+:where(:root:not([data-theme="light"])) .member-goal-head h3 {
+  color: #fff;
+}
+
+:where(:root:not([data-theme="light"])) .member-progress {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+:where(:root:not([data-theme="light"])) .accessibility-row span {
+  color: rgba(217, 255, 154, 0.75);
+}
+
+:where(:root:not([data-theme="light"])) .page-screen .subtle {
+  color: rgba(255, 255, 255, 0.72);
+}
+
 /* Wide screens: landing page */
 @media (min-width: 600px) and (max-width: 899px) {
   .landing-features {
@@ -3141,4 +3429,245 @@ button {
     padding-inline: 24px;
     font-size: 17px;
   }
+}
+
+/* Laptops and desktops: the app is designed at phone size, so scale its content up
+   instead of leaving small text and controls in a big window. */
+@media (min-width: 1024px) {
+  :root {
+    --gutter: max(18px, calc((100vw - 912px) / 2));
+  }
+
+  .auth-screen {
+    grid-template-columns: minmax(0, 540px);
+  }
+
+  .auth-hero,
+  .auth-panel,
+  .auth-top-actions > *,
+  .tab-content > :not(.confirm-overlay),
+  .tabs,
+  .confirm-dialog {
+    zoom: 1.2;
+  }
+
+  .auth-home-link {
+    font-size: 18px;
+  }
+
+  /* Form and detail pages sit in a centered card instead of spanning the window */
+  .page-screen {
+    display: grid;
+    grid-template-columns: minmax(0, 672px);
+    justify-content: center;
+    align-content: safe center;
+    padding-block: 24px;
+  }
+
+  .page-card {
+    zoom: 1.2;
+    padding: 24px 28px 28px;
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    background: var(--panel);
+    box-shadow: var(--shadow);
+  }
+}
+
+/* Admin dashboard */
+.admin-screen {
+  display: grid;
+  gap: 18px;
+  color: var(--text, #fff);
+}
+
+.admin-screen h1 {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.1;
+}
+
+.admin-screen > div > p {
+  margin: 7px 0 0;
+  color: rgba(var(--text-rgb, 255, 255, 255), 0.68);
+  font-size: 15px;
+}
+
+.admin-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.admin-tabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+
+.admin-tabs button {
+  flex: none;
+  min-height: 38px;
+  border: 1px solid rgba(var(--text-rgb, 255, 255, 255), 0.2);
+  border-radius: 99px;
+  padding: 6px 14px;
+  background: transparent;
+  color: var(--text, #fff);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.admin-tabs button.active {
+  border-color: transparent;
+  background: var(--lime, #c7ff4f);
+  color: #173006;
+}
+
+.admin-loading,
+.admin-count {
+  margin: 0;
+  color: rgba(var(--text-rgb, 255, 255, 255), 0.68);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.admin-stat-grid {
+  gap: 14px;
+}
+
+.admin-stat-grid .coach-stat {
+  min-height: 96px;
+  padding: 16px;
+  gap: 12px;
+}
+
+.admin-stat-grid .coach-stat span {
+  font-size: 15px;
+}
+
+.admin-stat-grid .coach-stat strong {
+  font-size: 38px;
+}
+
+.admin-stat-grid .coach-stat em {
+  font-size: 13px;
+}
+
+.admin-search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.admin-list {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-card {
+  color: var(--text, #fff);
+}
+
+.admin-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 10px;
+}
+
+.admin-card-head > div:first-child {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.admin-card-head strong,
+.admin-log-entry strong {
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+
+.admin-card-head small {
+  color: rgba(var(--text-rgb, 255, 255, 255), 0.6);
+  font-weight: 700;
+}
+
+.admin-card-head span,
+.admin-log-entry > span {
+  color: rgba(var(--text-rgb, 255, 255, 255), 0.68);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.admin-pills {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: end;
+  gap: 4px;
+}
+
+.pill.admin-pill {
+  background: var(--lime, #c7ff4f);
+  color: #173006;
+}
+
+.admin-meta,
+.admin-body {
+  margin: 0;
+  color: rgba(var(--text-rgb, 255, 255, 255), 0.68);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.admin-body {
+  color: var(--text, #fff);
+  font-size: 14px;
+  white-space: pre-line;
+}
+
+.admin-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.coach-mini-action.secondary {
+  background: rgba(var(--text-rgb, 255, 255, 255), 0.12);
+  color: var(--text, #fff);
+}
+
+.coach-mini-action.danger {
+  background: var(--danger);
+  color: #fff;
+}
+
+.admin-announcement-form h2 {
+  margin: 0;
+  color: var(--text, #fff);
+  font-size: 19px;
+}
+
+.admin-announcement-form .field span {
+  color: var(--text, #fff);
+}
+
+.confirm-dialog .textarea {
+  min-height: 70px;
+}
+
+.admin-subhead {
+  margin: 8px 0 0;
+  color: var(--text, #fff);
+  font-size: 18px;
+}
+
+.admin-pills.admin-specialties {
+  justify-content: start;
+}
+
+.coach-application-card .coach-mini-action {
+  justify-self: start;
 }
