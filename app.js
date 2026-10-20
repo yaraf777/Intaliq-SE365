@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { currentLanguage, dateLocale, localize, setLanguage } from "./i18n.js";
 
 const STORAGE_PREFIX = "intaliq-app-state-v2";
 const SHARED_SESSIONS_KEY = `${STORAGE_PREFIX}:shared-sessions`;
@@ -8,6 +9,7 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const productionAppUrl = "https://intaliq-se-365.vercel.app";
 const authRedirectUrl = import.meta.env.VITE_AUTH_REDIRECT_URL || productionAppUrl;
+const aiWorkerUrl = import.meta.env.VITE_AI_WORKER_URL || "https://intaliq.shoug-alomran.workers.dev";
 const hasSupabaseConfig = Boolean(supabaseUrl && supabaseAnonKey);
 const supabase = hasSupabaseConfig ? createClient(supabaseUrl, supabaseAnonKey) : null;
 
@@ -94,9 +96,27 @@ function themeToggleButton() {
   return `<button type="button" class="theme-toggle" data-action="toggle-theme" aria-label="Switch to ${isLight ? "dark" : "light"} mode">${icon}<span>${isLight ? "Dark" : "Light"}</span></button>`;
 }
 
+function toggleLanguage() {
+  setLanguage(currentLanguage() === "ar" ? "en" : "ar");
+  render();
+}
+
+// Each option is written in its own language, so either reader can find it.
+function languageSelect() {
+  const language = currentLanguage();
+  return `
+    <label class="lang-select" data-i18n-skip>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3 12h18M12 3c2.6 2.5 3.9 5.5 3.9 9s-1.3 6.5-3.9 9c-2.6-2.5-3.9-5.5-3.9-9S9.4 5.5 12 3z" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+      <select data-language-select aria-label="Language / اللغة">
+        <option value="en" lang="en"${language === "en" ? " selected" : ""}>English</option>
+        <option value="ar" lang="ar"${language === "ar" ? " selected" : ""}>العربية</option>
+      </select>
+    </label>`;
+}
+
 function updateStatusTime() {
   if (!statusTime) return;
-  statusTime.textContent = new Intl.DateTimeFormat([], {
+  statusTime.textContent = new Intl.DateTimeFormat(dateLocale(), {
     hour: "numeric",
     minute: "2-digit",
   }).format(new Date());
@@ -426,6 +446,7 @@ function saveState() {
     confirmJoinSessionId: "",
     confirmDeleteSessionId: "",
     futureFeatureMessage: "",
+    aiLoading: false,
   };
   localStorage.setItem(userStorageKey(state.user?.id), JSON.stringify(persistedState));
 }
@@ -673,6 +694,7 @@ function render() {
 
   if (!authReady) {
     app.innerHTML = `<div class="brand-screen"><img class="brand-logo" src="/favicon.svg" alt="Intaliq" /><p class="tagline">Loading Intaliq...</p></div>`;
+    localize(app);
     return;
   }
 
@@ -713,6 +735,7 @@ function render() {
   };
 
   app.innerHTML = (views[state.route] || landingView)() + signOutConfirmModal() + joinSessionConfirmModal() + deleteSessionConfirmModal() + futureFeatureModal();
+  localize(app);
   bindEvents();
 }
 
@@ -874,8 +897,7 @@ function landingFooter() {
       <div class="landing-footer-bottom">
         <span>© ${new Date().getFullYear()} Intaliq. All rights reserved.</span>
         <div class="landing-footer-meta">
-          <span>English</span>
-          ${themeToggleButton()}
+          ${languageSelect()}
         </div>
       </div>
     </footer>
@@ -928,7 +950,10 @@ function signInView() {
   return `
     <div class="auth-screen">
       <button type="button" class="auth-home-link" data-action="go-landing">‹ Home</button>
-      ${themeToggleButton()}
+      <div class="auth-top-actions">
+        ${languageSelect()}
+        ${themeToggleButton()}
+      </div>
       <header class="auth-hero">
         <h1>Welcome to Intaliq</h1>
         <p>Take your first step - Intaliq</p>
@@ -1215,7 +1240,7 @@ function activityCalories(activity) {
 
 function activityDateLabel(value) {
   if (!value) return "No time set";
-  return new Intl.DateTimeFormat([], {
+  return new Intl.DateTimeFormat(dateLocale(), {
     month: "short",
     day: "numeric",
     hour: "numeric",
@@ -1872,7 +1897,7 @@ function profileView() {
         ${moreMenuRow("◇", "Find Partners", "find-partners")}
         ${moreMenuRow("✦", "Chat with AI", "chat-ai")}
         ${moreMenuRow("◐", "Appearance", "toggle-theme", currentTheme() === "light" ? "Light" : "Dark", false)}
-        ${moreMenuRow("◎", "Language", "future-language", "English")}
+        ${moreMenuRow("◎", "Language", "toggle-language", currentLanguage() === "ar" ? "العربية" : "English", false)}
         ${moreMenuRow("?", "Help", "help", "intaliqsupport@gmail.com", false)}
         ${moreMenuRow("↩", "Log out", "signout")}
       </div>
@@ -2012,7 +2037,12 @@ function profileEditView() {
   `);
 }
 
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
+}
+
 function aiChatView() {
+  const messages = state.aiMessages || [];
   return withTabs("profile", `
     <div class="ai-chat-screen">
       <button class="member-view-all back-button" data-action="profile-menu">Back</button>
@@ -2020,16 +2050,47 @@ function aiChatView() {
         <h1>AI Coach</h1>
         <p>Ask for workout ideas, goal pacing, or session suggestions.</p>
       </div>
-      <div class="ai-chat-card">
+      <form class="ai-chat-card" data-form="ai-chat">
         <div class="ai-bubble">Hi, I can help you plan your next Intaliq activity. What are you training for?</div>
+        ${messages.map((message) => `<div class="${message.role === "user" ? "ai-bubble user-bubble" : "ai-bubble"}">${escapeHtml(message.content)}</div>`).join("")}
+        ${state.aiLoading ? `<div class="ai-bubble ai-typing">Thinking...</div>` : ""}
+        ${state.aiError ? `<div class="notice danger-box">${escapeHtml(state.aiError)}</div>` : ""}
         <label class="field">
           <span>Message</span>
-          <textarea class="textarea" placeholder="Ask Intaliq AI..."></textarea>
+          <textarea class="textarea" name="message" placeholder="Ask Intaliq AI..." required ${state.aiLoading ? "disabled" : ""}></textarea>
         </label>
-        <button class="btn btn-primary activity-submit" type="button">Send</button>
-      </div>
+        <button class="btn btn-primary activity-submit" type="submit" ${state.aiLoading ? "disabled" : ""}>${state.aiLoading ? "Sending..." : "Send"}</button>
+        ${messages.length ? `<button class="member-view-all" type="button" data-action="clear-ai-chat">Clear chat</button>` : ""}
+      </form>
     </div>
   `);
+}
+
+async function sendAiMessage(text) {
+  const message = text.trim();
+  if (!message || state.aiLoading) return;
+  const aiMessages = [...(state.aiMessages || []), { role: "user", content: message }];
+  setState({ aiMessages, aiLoading: true, aiError: "" });
+
+  try {
+    const response = await fetch(aiWorkerUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        messages: aiMessages,
+        profile: {
+          name: state.profile.name,
+          fitnessLevel: state.profile.fitnessLevel,
+          goals: (state.goals || []).map((goal) => `${goal.title} (${goal.progress}% done)`),
+        },
+      }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.reply) throw new Error(result.error || "The AI coach did not respond.");
+    setState({ aiMessages: [...aiMessages, { role: "assistant", content: result.reply }], aiLoading: false });
+  } catch (error) {
+    setState({ aiLoading: false, aiError: error.message || "Could not reach the AI coach." });
+  }
 }
 
 function partnersView() {
@@ -2425,6 +2486,13 @@ function bindEvents() {
     });
   });
 
+  app.querySelectorAll("[data-language-select]").forEach((select) => {
+    select.addEventListener("change", () => {
+      setLanguage(select.value);
+      render();
+    });
+  });
+
   app.querySelector("[data-partner-search]")?.addEventListener("input", (event) => {
     setState({ partnerSearch: event.target.value });
   });
@@ -2464,13 +2532,14 @@ function handleAction(action, data = {}) {
     "find-session": () => navigate("sessions"),
     "booked-sessions": () => setState({ route: "history", historyTab: "sessions", authError: "", authMessage: "" }),
     "ai-coach": () => navigate("ai-chat"),
+    "clear-ai-chat": () => setState({ aiMessages: [], aiError: "" }),
     "profile-menu": () => navigate("profile"),
     "view-profile": () => navigate("profile-detail"),
     "view-profile-edit": () => navigate("profile-edit"),
     "find-partners": () => openFindPartners(),
     "open-friend-chat": () => setState({ activeFriendName: data.name, route: "friend-chat" }),
     "chat-ai": () => navigate("ai-chat"),
-    "future-language": () => setState({ futureFeatureMessage: "This feature will be implemented in future versions." }),
+    "toggle-language": () => toggleLanguage(),
     "close-future-feature": () => setState({ futureFeatureMessage: "" }),
     "future-feature": () => setState({ futureFeatureMessage: `${data.feature || "This page"} will be available in a future version.` }),
     "scroll-to": () => document.getElementById(data.target)?.scrollIntoView({ behavior: "smooth", block: "start" }),
@@ -2499,6 +2568,11 @@ function handleAction(action, data = {}) {
 }
 
 async function handleForm(type, data) {
+  if (type === "ai-chat") {
+    await sendAiMessage(data.message || "");
+    return;
+  }
+
   if (type === "auth") {
     await handleAuth(data);
     return;

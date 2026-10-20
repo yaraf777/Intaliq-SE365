@@ -769,7 +769,7 @@ button {
   padding: 11px 12px;
   background: rgba(var(--surface-rgb, 96, 96, 96), 0.78);
   color: var(--text, #fff);
-  text-align: left;
+  text-align: start;
   box-shadow: 0 12px 24px rgba(0, 0, 0, calc(0.18 * var(--shadow-strength, 1)));
 }
 
@@ -1239,7 +1239,7 @@ button {
   align-items: center;
   background: rgba(var(--surface-rgb, 128, 128, 128), 0.82);
   color: #050505;
-  text-align: left;
+  text-align: start;
 }
 
 .more-row-icon,
@@ -1269,7 +1269,7 @@ button {
   font-size: 12px;
   font-style: normal;
   font-weight: 900;
-  text-align: right;
+  text-align: end;
   overflow-wrap: anywhere;
 }
 
@@ -1362,7 +1362,7 @@ button {
   display: grid;
   place-items: center;
   align-content: center;
-  border-left: 3px solid #050505;
+  border-inline-start: 3px solid #050505;
 }
 
 .profile-info-grid div {
@@ -1371,7 +1371,7 @@ button {
 
 .profile-stat-strip div:first-child,
 .profile-info-grid div:nth-child(odd) {
-  border-left: 0;
+  border-inline-start: 0;
 }
 
 .profile-info-grid div:nth-child(-n + 2) {
@@ -1416,7 +1416,7 @@ button {
   font-size: 12px;
   font-style: normal;
   font-weight: 900;
-  text-align: right;
+  text-align: end;
   overflow-wrap: anywhere;
 }
 
@@ -1491,11 +1491,29 @@ button {
 
 .ai-bubble {
   padding: 13px 14px;
-  border-radius: 14px 14px 14px 4px;
+  border-radius: 14px;
+  border-end-start-radius: 4px;
   background: rgba(var(--lime-rgb, 199, 255, 79), 0.18);
   color: var(--lime-ink, #eaffce);
   font-size: 14px;
   font-weight: 800;
+}
+
+.ai-bubble.user-bubble {
+  justify-self: end;
+  max-width: 85%;
+  border-radius: 14px 14px 4px 14px;
+  background: rgba(var(--text-rgb, 255, 255, 255), 0.12);
+  color: var(--text, #fff);
+  font-weight: 600;
+}
+
+.ai-bubble {
+  white-space: pre-wrap;
+}
+
+.ai-typing {
+  opacity: 0.7;
 }
 
 .ai-chat-card .field span {
@@ -1514,7 +1532,7 @@ button {
   align-items: center;
   background: rgba(255, 255, 255, 0.92);
   color: #202020;
-  text-align: left;
+  text-align: start;
 }
 
 .partner-card {
@@ -1758,7 +1776,7 @@ button {
 .event-filter-tabs button {
   min-height: 48px;
   border: 0;
-  border-right: 2px solid #050505;
+  border-inline-end: 2px solid #050505;
   background: transparent;
   color: #050505;
   font-size: 18px;
@@ -1773,7 +1791,7 @@ button {
 }
 
 .event-filter-tabs button:last-child {
-  border-right: 0;
+  border-inline-end: 0;
 }
 
 .event-filter-tabs button.active {
@@ -2655,16 +2673,18 @@ button {
   color: var(--lime-text, #c7ff4f);
 }
 
-.auth-screen > .theme-toggle {
+.auth-top-actions {
   position: absolute;
   top: 14px;
-  right: var(--gutter);
+  inset-inline-end: var(--gutter);
+  display: flex;
+  gap: 8px;
 }
 
 .auth-home-link {
   position: absolute;
   top: 14px;
-  left: var(--gutter);
+  inset-inline-start: var(--gutter);
   min-height: 40px;
   border: 0;
   padding: 0;
@@ -2938,7 +2958,7 @@ button {
   background: transparent;
   color: rgba(var(--text-rgb, 255, 255, 255), 0.72);
   font-size: 14px;
-  text-align: left;
+  text-align: start;
   text-decoration: none;
 }
 
@@ -2971,6 +2991,70 @@ button {
     grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
     gap: 48px;
   }
+}
+
+.lang-select {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  color: var(--text, #fff);
+}
+
+.lang-select svg {
+  position: absolute;
+  inset-inline-start: 12px;
+  width: 16px;
+  height: 16px;
+  pointer-events: none;
+}
+
+/* Chevron */
+.lang-select::after {
+  content: "";
+  position: absolute;
+  inset-inline-end: 14px;
+  width: 7px;
+  height: 7px;
+  margin-top: -4px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+
+.lang-select select {
+  appearance: none;
+  -webkit-appearance: none;
+  min-height: 40px;
+  border: 1px solid rgba(var(--text-rgb, 255, 255, 255), 0.22);
+  border-radius: 999px;
+  padding-block: 8px;
+  padding-inline: 36px 34px;
+  background: rgba(var(--overlay-rgb, 255, 255, 255), 0.12);
+  color: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.lang-select select:focus-visible {
+  outline: 2px solid var(--lime, #c7ff4f);
+  outline-offset: 2px;
+}
+
+/* The open list is drawn by the OS, so keep its text readable in both themes */
+.lang-select option {
+  color: #202020;
+  background: #ffffff;
+}
+
+/* Arabic: prefer the platform's Arabic UI font, and give big headings room for Arabic letterforms. */
+:root[lang="ar"] body {
+  font-family: "SF Arabic", "Segoe UI", Tahoma, ui-sans-serif, system-ui, sans-serif;
+}
+
+:root[lang="ar"] .landing-hero h1 {
+  line-height: 1.2;
 }
 
 /* Wide screens: landing page */

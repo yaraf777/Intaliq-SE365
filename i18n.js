@@ -1,0 +1,540 @@
+// English/Arabic (Saudi) support.
+//
+// Views are written in English. After each render, localize() walks the
+// rendered DOM and swaps English text and attributes for Arabic using the
+// exact-match dictionary below, then the pattern rules for text that mixes in
+// live values (names, counts, dates). Anything without a translation, such as
+// user-entered session titles, is left as written.
+
+const LANGUAGE_KEY = "intaliq-lang";
+const ENGLISH_TITLE = document.title;
+const ARABIC_TITLE = "انطلق – تحرّك أبعد، مع بعض";
+const TRANSLATED_ATTRIBUTES = ["placeholder", "aria-label", "title", "alt"];
+const SKIPPED_TAGS = new Set(["SCRIPT", "STYLE", "SVG"]);
+
+const ar = {
+  // Brand, landing page and footer
+  "Intaliq": "انطلق",
+  "Take your first step": "خذ أول خطوة",
+  "Move further,": "تحرّك أبعد،",
+  "together.": "مع بعض.",
+  "Intaliq helps you set fitness goals, join sessions with local coaches and keep your momentum going.": "انطلق يساعدك تحط أهدافك الرياضية، وتنضم لجلسات مع كوتشز من مدينتك، وتكمل على نفس الحماس.",
+  "Get started": "يلا نبدأ",
+  "I have an account": "عندي حساب",
+  "Everything in one place": "كل اللي تحتاجه في مكان واحد",
+  "Set goals": "حط أهدافك",
+  "Break a big goal into checkpoints and watch your progress add up.": "قسّم هدفك الكبير لمراحل وشوف تقدمك يكبر خطوة بخطوة.",
+  "Join sessions": "انضم للجلسات",
+  "Find coach-led workouts and request a spot in a tap.": "لقّ تمارين مع كوتشز واحجز مكانك بضغطة.",
+  "Log activities": "سجّل نشاطك",
+  "Track distance, active days and calories week by week.": "تابع المسافة والأيام النشطة والسعرات أسبوع بأسبوع.",
+  "Stay in the loop": "خلك على اطلاع",
+  "Get session updates and announcements from your coaches.": "توصلك تحديثات الجلسات وإعلانات الكوتشز أول بأول.",
+  "Are you a coach?": "أنت كوتش؟",
+  "Create sessions, admit members and post announcements.": "سوّ جلساتك، واقبل الأعضاء، وانشر إعلاناتك.",
+  "Join as a coach": "سجّل ككوتش",
+  "Set goals, join coach-led sessions and keep your momentum going.": "حط أهدافك، وانضم لجلسات مع كوتشز، وكمّل على نفس الحماس.",
+  "Product": "المنتج",
+  "Features": "المميزات",
+  "For coaches": "للكوتشز",
+  "Create an account": "سوّ حساب",
+  "Support": "الدعم",
+  "Contact support": "تواصل مع الدعم",
+  "Help center": "مركز المساعدة",
+  "FAQ": "الأسئلة الشائعة",
+  "Report a problem": "بلّغ عن مشكلة",
+  "Legal": "الشروط والسياسات",
+  "Privacy policy": "سياسة الخصوصية",
+  "Terms of service": "شروط الاستخدام",
+  "Cookie policy": "سياسة ملفات الارتباط",
+  "Accessibility": "سهولة الوصول",
+  "Footer": "تذييل الصفحة",
+  "Light": "فاتح",
+  "Dark": "داكن",
+  "‹ Home": "→ الرئيسية",
+  "→": "←",
+  "Loading Intaliq...": "جاري تحميل انطلق...",
+  "Coming soon": "قريبًا",
+  "OK": "تمام",
+  "This feature will be implemented in future versions.": "هالميزة بتنضاف في الإصدارات الجاية.",
+  "This page": "هالصفحة",
+
+  // Sign in, sign up and verification
+  "Welcome to Intaliq": "حيّاك في انطلق",
+  "Take your first step - Intaliq": "خذ أول خطوة مع انطلق",
+  "Account type": "نوع الحساب",
+  "User": "مستخدم",
+  "Coach": "كوتش",
+  "Name": "الاسم",
+  "Interests": "اهتماماتك",
+  "Coaching specialty": "تخصصك في التدريب",
+  "Fitness level": "مستواك الرياضي",
+  "Email": "الإيميل",
+  "Enter your email": "اكتب إيميلك",
+  "Password": "كلمة المرور",
+  "Enter your password": "اكتب كلمة المرور",
+  "Confirm password": "أكّد كلمة المرور",
+  "Re-enter your password": "اكتب كلمة المرور مرة ثانية",
+  "Create account": "سوّ الحساب",
+  "Continue": "كمّل",
+  "Please wait...": "لحظة شوي...",
+  "Already have an account?": "عندك حساب من قبل؟",
+  "Don't have an account yet?": "ما عندك حساب؟",
+  "Log in": "دخول",
+  "Sign in": "سجّل دخول",
+  "Sign up": "سجّل الحين",
+  "Supabase is not configured yet. Add your project URL and anon key to": "Supabase ما تم إعداده للحين. أضف رابط المشروع والمفتاح العام في",
+  ", then restart the local server.": "، وبعدها أعد تشغيل السيرفر المحلي.",
+  "Verify Your Identity": "تحقق من هويتك",
+  "your email": "إيميلك",
+  "Verification Code": "رمز التحقق",
+  "Enter 6-digit code": "اكتب الرمز المكوّن من ٦ أرقام",
+  "Verify & Login": "تحقق وادخل",
+  "Verifying...": "جاري التحقق...",
+  "Resend code": "أرسل الرمز مرة ثانية",
+  "Back to login": "ارجع لتسجيل الدخول",
+
+  // Onboarding and goals
+  "Set your first goal": "حط أول هدف لك",
+  "Tell Intaliq what you want to move forward.": "قول لانطلق وش ودك تحقق.",
+  "Create your first session": "سوّ أول جلسة لك",
+  "Start by opening a workout session for users.": "ابدأ بفتح جلسة تمرين للمستخدمين.",
+  "Save goal": "احفظ الهدف",
+  "Create session": "سوّ الجلسة",
+  "Skip for now": "تخطّ الحين",
+  "Goals": "الأهداف",
+  "+ Goal": "+ هدف",
+  "No goals yet.": "ما عندك أهداف للحين.",
+  "Set a running, hiking, or biking distance goal.": "حط هدف مسافة للجري أو الهايكنق أو الدراجة.",
+  "Choose one activity type and set a distance target.": "اختر نوع النشاط وحدد المسافة اللي تبغاها.",
+  "Activity type": "نوع النشاط",
+  "Goal name": "اسم الهدف",
+  "Running goal": "هدف جري",
+  "Due date": "الموعد النهائي",
+  "Desired distance (km)": "المسافة المطلوبة (كم)",
+  "Create Goal": "سوّ الهدف",
+  "Create goal": "سوّ الهدف",
+  "Create plan": "سوّ الخطة",
+  "New goal": "هدف جديد",
+  "New training plan": "خطة تدريب جديدة",
+  "Set a measurable goal and checkpoint flags.": "حط هدف تقدر تقيسه مع مراحل واضحة.",
+  "Create a plan template with client checkpoints.": "سوّ قالب خطة فيه مراحل لعملائك.",
+  "Goal title": "عنوان الهدف",
+  "Plan title": "عنوان الخطة",
+  "Category": "التصنيف",
+  "Due": "الموعد",
+  "No goal selected.": "ما اخترت هدف.",
+  "Set a goal first.": "حط هدف أول.",
+  "Distance covered now (km)": "المسافة اللي قطعتها للحين (كم)",
+  "Update Goal": "حدّث الهدف",
+  "Update checkpoint": "حدّث المرحلة",
+  "Progress": "التقدم",
+  "Completed": "مكتمل",
+  "Active Goals": "أهدافك الحالية",
+  "No active goals yet.": "ما عندك أهداف حالية.",
+  "Set your first goal to start tracking progress.": "حط أول هدف وابدأ تتابع تقدمك.",
+  "This week": "هالأسبوع",
+  "Goal created.": "انضاف الهدف.",
+  "Goal progress updated.": "تحدّث تقدم الهدف.",
+
+  // Member home
+  "User stats": "إحصائياتك",
+  "This Week": "هالأسبوع",
+  "Calories": "السعرات",
+  "Active Days": "الأيام النشطة",
+  "Sessions": "الجلسات",
+  "Quick Actions": "اختصارات",
+  "Log Activity": "سجّل نشاط",
+  "Set Goal": "حط هدف",
+  "Find Session": "دوّر جلسة",
+  "AI Coach": "الكوتش الذكي",
+  "My Booked Sessions": "جلساتي المحجوزة",
+  "View all": "عرض الكل",
+  "View All": "عرض الكل",
+  "No booked sessions yet.": "ما عندك جلسات محجوزة للحين.",
+  "Admitted sessions will appear here.": "الجلسات اللي تنقبل فيها بتطلع هنا.",
+  "Confirmed": "مؤكدة",
+  "Important Announcements": "إعلانات مهمة",
+  "No important announcements yet.": "ما فيه إعلانات مهمة للحين.",
+  "Updates from sessions you book will appear here.": "تحديثات الجلسات اللي تحجزها بتطلع هنا.",
+  "Session update": "تحديث جلسة",
+  "General announcement": "إعلان عام",
+  "Your session": "جلستك",
+  "Booked session": "جلسة محجوزة",
+  "Intaliq athlete": "رياضي انطلق",
+  "Intaliq member": "عضو في انطلق",
+  "Intaliq user": "مستخدم انطلق",
+  "New user": "مستخدم جديد",
+
+  // Activities and stats
+  "Activities": "الأنشطة",
+  "+ Log": "+ سجّل",
+  "No activities yet.": "ما سجلت أي نشاط للحين.",
+  "Log a run, bike ride, or hike to see it here.": "سجّل جري أو مشوار دراجة أو هايكنق عشان يطلع هنا.",
+  "Choose one activity and add the workout details.": "اختر النشاط وأضف تفاصيل التمرين.",
+  "Time of activity": "وقت النشاط",
+  "Distance covered (km)": "المسافة اللي قطعتها (كم)",
+  "Activity duration (minutes)": "مدة النشاط (بالدقايق)",
+  "Save Activity": "احفظ النشاط",
+  "Activity logged successfully.": "تسجّل النشاط بنجاح.",
+  "No time set": "ما فيه وقت محدد",
+  "My stats": "إحصائياتي",
+  "Distance covered and calories burned": "المسافة اللي قطعتها والسعرات اللي حرقتها",
+  "Stats period": "فترة الإحصائيات",
+  "Day": "يوم",
+  "Week": "أسبوع",
+  "Month": "شهر",
+  "Year": "سنة",
+  "Distance": "المسافة",
+  "History": "السجل",
+  "History tabs": "أقسام السجل",
+  "Sessions you book will appear here.": "الجلسات اللي تحجزها بتطلع هنا.",
+
+  // Activity types and interests
+  "All": "الكل",
+  "Running": "الجري",
+  "Hiking": "الهايكنق",
+  "Cycling": "الدراجة",
+  "Biking": "الدراجة",
+  "Run": "جري",
+  "Bike": "دراجة",
+  "Hike": "هايكنق",
+  "Strength": "القوة",
+  "Cardio": "كارديو",
+  "Mobility": "المرونة",
+  "Weight loss": "تنزيل الوزن",
+  "Nutrition": "التغذية",
+  "Recovery": "الاستشفاء",
+  "Beginner": "مبتدئ",
+  "Intermediate": "متوسط",
+  "Advanced": "متقدم",
+  "All levels": "كل المستويات",
+
+  // Events
+  "Events": "الفعاليات",
+  "Notifications grouped by activity type": "الإشعارات مرتبة حسب نوع النشاط",
+  "Event categories": "تصنيفات الفعاليات",
+  "No general announcements yet.": "ما فيه إعلانات عامة للحين.",
+
+  // Sessions
+  "Sessions offered": "الجلسات المتاحة",
+  "No sessions offered yet.": "ما فيه جلسات متاحة للحين.",
+  "Coach-created sessions will appear here when available.": "الجلسات اللي يسويها الكوتشز بتطلع هنا أول ما تتوفر.",
+  "No sessions yet. Create your first coaching session.": "ما عندك جلسات للحين. سوّ أول جلسة تدريب لك.",
+  "+ Session": "+ جلسة",
+  "Details": "التفاصيل",
+  "Request Join": "اطلب انضمام",
+  "Request to join": "اطلب انضمام",
+  "Join session": "انضم للجلسة",
+  "Leave session": "اطلع من الجلسة",
+  "Open": "مفتوحة",
+  "Approval required": "تحتاج موافقة",
+  "Pending": "بالانتظار",
+  "Joined": "منضم",
+  "Seats": "المقاعد",
+  "Code": "الرمز",
+  "Session confirmed": "تأكدت الجلسة",
+  "You have been admitted by the coach.": "الكوتش قبلك في الجلسة.",
+  "Request sent": "انرسل الطلب",
+  "Waiting for coach approval.": "بانتظار موافقة الكوتش.",
+  "Admission requests": "طلبات الانضمام",
+  "No pending users.": "ما فيه أحد بالانتظار.",
+  "No enrolled users yet.": "ما فيه مسجلين للحين.",
+  "Announcement": "إعلان",
+  "Announcements": "الإعلانات",
+  "Share an update with this session": "شارك تحديث مع هالجلسة",
+  "Post announcement": "انشر الإعلان",
+  "coach": "كوتش",
+  "member": "عضو",
+  "Delete session": "احذف الجلسة",
+  "Only coaches can create sessions.": "بس الكوتشز يقدرون يسوون جلسات.",
+  "Users can request to join coach-created sessions.": "المستخدمين يقدرون يطلبون الانضمام لجلسات الكوتشز.",
+  "← Back": "→ رجوع",
+  "Back": "رجوع",
+  "Create Group Session": "سوّ جلسة جماعية",
+  "Set up a new session for members to join": "جهّز جلسة جديدة ينضم لها الأعضاء",
+  "Session Title": "عنوان الجلسة",
+  "e.g., Morning Run Crew": "مثلًا: شلة الجري الصباحي",
+  "Date": "التاريخ",
+  "Time": "الوقت",
+  "Capacity": "العدد",
+  "Maximum participants": "أقصى عدد للمشاركين",
+  "Intensity Level": "مستوى الشدة",
+  "Location": "الموقع",
+  "e.g., King Abdullah Park, Riyadh": "مثلًا: منتزه الملك عبدالله، الرياض",
+  "Description": "الوصف",
+  "e.g., any requirements, or expectations": "مثلًا: أي متطلبات أو توقعات",
+  "None": "ولا شيء",
+  "Wheelchair-Friendly": "مناسبة للكراسي المتحركة",
+  "Elderly-Friendly": "مناسبة لكبار السن",
+  "Create Session": "سوّ الجلسة",
+  "Focused workout session.": "جلسة تمرين مركّزة.",
+  "Choose today or a future date for the session.": "اختر تاريخ اليوم أو تاريخ جاي للجلسة.",
+  "Choose a future time for today's session.": "اختر وقت جاي لجلسة اليوم.",
+  "Coaches cannot enroll in their own sessions.": "الكوتش ما يقدر يسجل في جلساته.",
+  "This session needs to be synced by its coach before requests can be sent.": "لازم الكوتش يزامن هالجلسة قبل لا تنرسل الطلبات.",
+  "Could not send the request yet. Please run the admission requests SQL in Supabase.": "ما قدرنا نرسل الطلب للحين. شغّل أوامر SQL الخاصة بطلبات الانضمام في Supabase.",
+  "Only the coach who created this session can delete it.": "بس الكوتش اللي سوّى الجلسة يقدر يحذفها.",
+  "Could not delete this session yet. Add the Supabase delete policy, then try again.": "ما قدرنا نحذف الجلسة للحين. أضف سياسة الحذف في Supabase وجرّب مرة ثانية.",
+  "Session deleted.": "انحذفت الجلسة.",
+  "Choose a session first.": "اختر جلسة أول.",
+
+  // Confirm dialogs
+  "Log out?": "تبغى تطلع؟",
+  "Are you sure you want to log out?": "متأكد إنك تبغى تسجل خروج؟",
+  "Cancel": "إلغاء",
+  "Log out": "تسجيل الخروج",
+  "Request to join?": "تبغى تطلب الانضمام؟",
+  "this session": "هالجلسة",
+  "Delete session?": "تحذف الجلسة؟",
+  "Delete": "احذف",
+
+  // Coach
+  "Coach Dashboard": "لوحة الكوتش",
+  "Logout": "خروج",
+  "Coach stats": "إحصائيات الكوتش",
+  "Active Sessions": "الجلسات النشطة",
+  "Total Members": "إجمالي الأعضاء",
+  "Pending Requests": "الطلبات المعلّقة",
+  "Total Sessions": "إجمالي الجلسات",
+  "Create New Session": "سوّ جلسة جديدة",
+  "Review Requests": "راجع الطلبات",
+  "Make Announcement": "سوّ إعلان",
+  "My Sessions": "جلساتي",
+  "Upcoming Sessions": "الجلسات الجاية",
+  "No upcoming sessions yet.": "ما عندك جلسات جاية للحين.",
+  "Create your first session to start receiving members and requests.": "سوّ أول جلسة عشان تبدأ تستقبل أعضاء وطلبات.",
+  "Admissions": "القبول",
+  "Admit": "اقبل",
+  "No pending admissions.": "ما فيه طلبات قبول معلّقة.",
+  "Requests for approval-required sessions will appear here.": "طلبات الجلسات اللي تحتاج موافقة بتطلع هنا.",
+  "Announce": "إعلان",
+  "Send Updates to session participants": "أرسل تحديثات للمشاركين في الجلسة",
+  "Select Session": "اختر الجلسة",
+  "Choose a session...": "اختر جلسة...",
+  "General": "عام",
+  "Subject": "الموضوع",
+  "e.g., Location Change, Time Update, Important Notice": "مثلًا: تغيير الموقع، تحديث الوقت، تنبيه مهم",
+  "Message": "الرسالة",
+  "Write your announcement message...": "اكتب نص إعلانك...",
+  "Note:": "ملاحظة:",
+  "This announcement will be sent to all participants in the selected session.": "هالإعلان بيوصل لكل المشاركين في الجلسة اللي اخترتها.",
+  "Send Announcement": "أرسل الإعلان",
+  "General announcement sent.": "انرسل الإعلان العام.",
+  "Announcement sent.": "انرسل الإعلان.",
+
+  // Partners, requests and chat
+  "Find Partners": "دوّر شركاء",
+  "Search users": "دوّر مستخدمين",
+  "Search by name, city, or interest": "دوّر بالاسم أو المدينة أو الاهتمام",
+  "Loading partner accounts...": "جاري تحميل حسابات الشركاء...",
+  "Checking public Intaliq profiles.": "نشيّك على الملفات العامة في انطلق.",
+  "Could not load partner accounts.": "ما قدرنا نحمّل حسابات الشركاء.",
+  "No partner accounts found.": "ما لقينا حسابات شركاء.",
+  "Try a different search.": "جرّب تدوّر بكلمة ثانية.",
+  "When users create public profiles in Supabase, they will appear here.": "أول ما يسوي المستخدمين ملفات عامة في Supabase بيطلعون هنا.",
+  "City not set": "المدينة مو محددة",
+  "Connect": "تواصل",
+  "Friend": "صديق",
+  "Requests": "الطلبات",
+  "No requests yet.": "ما فيه طلبات للحين.",
+  "When another user or coach asks to partner with you, their request will appear here.": "إذا طلب مستخدم أو كوتش يصير شريكك، بيطلع طلبه هنا.",
+  "No interests yet": "ما فيه اهتمامات للحين",
+  "Accept": "اقبل",
+  "Reject": "ارفض",
+  "Partner request connected": "تم التواصل مع الشريك",
+  "No partner requests yet.": "ما فيه طلبات شراكة للحين.",
+  "People you request or connect with will appear here.": "الناس اللي تطلبهم أو تتواصل معهم بيطلعون هنا.",
+  "Partner request rejected.": "انرفض طلب الشراكة.",
+  "Sign in first so Intaliq can load partner profiles.": "سجّل دخول أول عشان انطلق يقدر يحمّل ملفات الشركاء.",
+  "Chat with your Intaliq friend.": "سولف مع صديقك في انطلق.",
+  "Write a message...": "اكتب رسالة...",
+  "Send": "أرسل",
+  "Chat with AI": "سولف مع الذكاء الاصطناعي",
+  "Ask for workout ideas, goal pacing, or session suggestions.": "اسأل عن أفكار تمارين، أو كيف توزع هدفك، أو اقتراحات جلسات.",
+  "Hi, I can help you plan your next Intaliq activity. What are you training for?": "هلا! أقدر أساعدك تخطط نشاطك الجاي في انطلق. وش تتمرن له؟",
+  "Ask Intaliq AI...": "اسأل ذكاء انطلق...",
+
+  // More menu and profile
+  "More": "المزيد",
+  "Manage your account and support options.": "تحكم بحسابك وخيارات الدعم.",
+  "View Profile": "ملفي الشخصي",
+  "Appearance": "المظهر",
+  "Language": "اللغة",
+  "Help": "المساعدة",
+  "Profile": "الملف الشخصي",
+  "Friends": "الأصدقاء",
+  "Hidden": "مخفي",
+  "Age": "العمر",
+  "Interest": "الاهتمام",
+  "City": "المدينة",
+  "Nationality": "الجنسية",
+  "Edit Profile": "عدّل ملفك",
+  "Update your account details and public profile.": "حدّث بيانات حسابك وملفك العام.",
+  "Profile picture": "الصورة الشخصية",
+  "Full name": "الاسم الكامل",
+  "Birthdate": "تاريخ الميلاد",
+  "Display age on profile": "اعرض عمري في الملف",
+  "New password": "كلمة مرور جديدة",
+  "Leave blank to keep current password": "خلّه فاضي إذا تبغى تبقي كلمة المرور الحالية",
+  "Update Profile": "حدّث الملف",
+  "Profile saved.": "انحفظ ملفك.",
+  "Profile saved. Check your inbox to confirm the new email address.": "انحفظ ملفك. شيّك على بريدك عشان تأكد الإيميل الجديد.",
+  "Signed out.": "سجلت خروج.",
+  "Home": "الرئيسية",
+  "Primary": "التنقل الرئيسي",
+
+  // Places
+  "Jeddah": "جدة",
+  "Riyadh": "الرياض",
+  "Tabuk": "تبوك",
+  "Mecca": "مكة",
+  "Madina": "المدينة",
+  "Not set": "مو محدد",
+  "Saudi Arabia": "السعودية",
+  "Egypt": "مصر",
+  "United Arab Emirates": "الإمارات",
+  "Kuwait": "الكويت",
+  "Bahrain": "البحرين",
+  "Qatar": "قطر",
+  "Oman": "عُمان",
+  "Jordan": "الأردن",
+  "Lebanon": "لبنان",
+  "Palestine": "فلسطين",
+  "Yemen": "اليمن",
+  "Pakistan": "باكستان",
+  "India": "الهند",
+  "Philippines": "الفلبين",
+  "United States": "أمريكا",
+  "United Kingdom": "بريطانيا",
+
+  // Auth messages from the app and common Supabase errors
+  "Enter a valid email address.": "اكتب إيميل صحيح.",
+  "Add Supabase environment variables before signing in.": "أضف متغيرات Supabase قبل تسجيل الدخول.",
+  "Add Supabase environment variables before verifying.": "أضف متغيرات Supabase قبل التحقق.",
+  "Passwords do not match.": "كلمتين المرور مو متطابقة.",
+  "Choose at least one fitness interest.": "اختر اهتمام رياضي واحد على الأقل.",
+  "Tell us your coaching specialty.": "قول لنا وش تخصصك في التدريب.",
+  "Enter the 6-digit code sent to your email.": "اكتب الرمز المكوّن من ٦ أرقام اللي وصلك على الإيميل.",
+  "Enter the 6-digit verification code.": "اكتب رمز التحقق المكوّن من ٦ أرقام.",
+  "Unable to continue. Please try again.": "ما قدرنا نكمل. جرّب مرة ثانية.",
+  "Check your email for the verification code or confirmation link.": "شيّك على إيميلك، بتلقى رمز التحقق أو رابط التأكيد.",
+  "Enter your email again to request a code.": "اكتب إيميلك مرة ثانية عشان نرسل لك رمز.",
+  "Invalid login credentials": "الإيميل أو كلمة المرور غلط",
+  "Email not confirmed": "الإيميل ما تأكد للحين",
+  "User already registered": "هالإيميل مسجل من قبل",
+  "Token has expired or is invalid": "الرمز منتهي أو غلط",
+};
+
+// Keeps an English name or email from reordering the Arabic punctuation around it.
+const isolate = (text) => `\u2068${text}\u2069`;
+
+const activityNames = { run: "جري", hike: "هايكنق", bike: "دراجة" };
+
+// Arabic counts change form with the number: 1, 2, 3–10, and 11+.
+function count(n, one, two, few, many) {
+  const value = Number(n);
+  if (value === 1) return one;
+  if (value === 2) return two;
+  if (value >= 3 && value <= 10) return `${n} ${few}`;
+  return `${n} ${many}`;
+}
+
+const patterns = [
+  [/^Welcome back, (.+)!$/, (name) => `هلا والله، ${isolate(name)}!`],
+  [/^Are you sure you want to request to join (.+)\?$/, (title) => `متأكد إنك تبغى تطلب الانضمام لـ ${isolate(translate(title))}؟`],
+  [/^This will remove (.+) from every user and coach view\.$/, (title) => `بتنحذف ${isolate(translate(title))} من عند كل المستخدمين والكوتشز.`],
+  [/^We've sent a verification code to (.+)\.$/, (email) => `أرسلنا لك رمز تحقق على ${isolate(translate(email))}.`],
+  [/^© (\d+) Intaliq\. All rights reserved\.$/, (year) => `© ${year} انطلق. جميع الحقوق محفوظة.`],
+  [/^(.+) will be available in a future version\.$/, (feature) => `${translate(feature)} بتكون متاحة في إصدار جاي.`],
+  [/^Help: (.+)$/, (email) => `المساعدة: ${email}`],
+  [/^Switch to (dark|light) mode$/, (mode) => (mode === "dark" ? "بدّل للوضع الداكن" : "بدّل للوضع الفاتح")],
+  [/^(.+) distance and calories chart$/, (period) => `رسم المسافة والسعرات (${translate(period)})`],
+  [/^Due:? (.+)$/, (due) => `الموعد: ${translate(due)}`],
+  [/^(\d+)% complete$/, (n) => `مكتمل ${n}%`],
+  [/^([\d.]+) of ([\d.]+) km covered$/, (done, total) => `قطعت ${done} من ${total} كم`],
+  [/^([\d.,]+) km total$/, (n) => `المجموع ${n} كم`],
+  [/^([\d.,]+) km$/, (n) => `${n} كم`],
+  [/^(\d+) min$/, (n) => `${n} دقيقة`],
+  [/^([\d,]+) cal$/, (n) => `${n} سعرة`],
+  [/^(\d+) logged$/, (n) => `${n} مسجّلة`],
+  [/^(\d+)\/(\d+) people$/, (n, max) => `${n}/${max} أشخاص`],
+  [/^(\d+)\/(\d+) enrolled - (\d+) spots? left$/, (n, max, left) => `${n}/${max} مسجّلين - باقي ${count(left, "مقعد واحد", "مقعدين", "مقاعد", "مقعد")}`],
+  [/^(\d+) booked sessions?$/, (n) => `${count(n, "جلسة محجوزة وحدة", "جلستين محجوزة", "جلسات محجوزة", "جلسة محجوزة")}`],
+  [/^(\p{Regional_Indicator}{2}|🌐) (.+)$/u, (flag, country) => `${flag} ${translate(country)}`],
+  [/^(\d+) pending$/, (n) => `${n} بالانتظار`],
+  [/^(\d+) notifications?$/, (n) => (Number(n) === 0 ? "ما فيه إشعارات" : count(n, "إشعار واحد", "إشعارين", "إشعارات", "إشعار"))],
+  [/^(\d+) sessions? offered$/, (n) => (Number(n) === 0 ? "ما فيه جلسات متاحة" : `${count(n, "جلسة وحدة", "جلستين", "جلسات", "جلسة")} متاحة`)],
+  [/^(\d+) requests? received$/, (n) => (Number(n) === 0 ? "ما وصلك طلبات" : `وصلك ${count(n, "طلب واحد", "طلبين", "طلبات", "طلب")}`)],
+  [/^(\d+) admission requests? waiting$/, (n) => `${count(n, "طلب انضمام واحد", "طلبين انضمام", "طلبات انضمام", "طلب انضمام")} بالانتظار`],
+  [/^No (run|hike|bike) notifications yet\.$/, (type) => `ما فيه إشعارات ${activityNames[type]} للحين.`],
+  [/^Start the conversation with (.+)\.$/, (name) => `ابدأ السالفة مع ${isolate(name)}.`],
+  [/^Checkpoint (\d+)$/, (n) => `المرحلة ${n}`],
+  [/^(\d{4}-\d{2}-\d{2}) at (.+)$/, (date, time) => `${date} الساعة ${time}`],
+  [/^Coach (.+)$/, (name) => `الكوتش ${isolate(translate(name))}`],
+  [/^♿ (.+)$/, (label) => `♿ ${translate(label)}`],
+];
+
+export function translate(text) {
+  if (ar[text]) return ar[text];
+  for (const [pattern, replace] of patterns) {
+    const match = text.match(pattern);
+    if (match) return replace(...match.slice(1));
+  }
+  // "Run · Due This week" style lines: translate each part on its own.
+  if (text.includes(" · ")) return text.split(" · ").map(translate).join(" · ");
+  return text;
+}
+
+function localizeNode(node) {
+  if (node.nodeType === Node.TEXT_NODE) {
+    const raw = node.nodeValue;
+    const text = raw.replace(/\s+/g, " ").trim();
+    if (!text) return;
+    const translated = translate(text);
+    if (translated !== text) {
+      node.nodeValue = `${raw.match(/^\s*/)[0]}${translated}${raw.match(/\s*$/)[0]}`;
+    }
+    return;
+  }
+  if (node.nodeType !== Node.ELEMENT_NODE) return;
+  if (SKIPPED_TAGS.has(node.tagName.toUpperCase()) || node.hasAttribute("data-i18n-skip")) return;
+  // An <option> without a value submits its text, so pin the English value first.
+  if (node.tagName === "OPTION" && !node.hasAttribute("value")) {
+    node.setAttribute("value", node.textContent);
+  }
+  for (const attribute of TRANSLATED_ATTRIBUTES) {
+    const value = node.getAttribute(attribute);
+    if (value) node.setAttribute(attribute, translate(value.trim()));
+  }
+  // A textarea's text is what the user typed, so only its attributes are translated.
+  if (node.tagName !== "TEXTAREA") node.childNodes.forEach(localizeNode);
+}
+
+export function localize(root) {
+  if (currentLanguage() === "ar") localizeNode(root);
+}
+
+export function currentLanguage() {
+  return document.documentElement.lang === "ar" ? "ar" : "en";
+}
+
+export function setLanguage(language) {
+  const isArabic = language === "ar";
+  document.documentElement.lang = isArabic ? "ar" : "en";
+  document.documentElement.dir = isArabic ? "rtl" : "ltr";
+  document.title = isArabic ? ARABIC_TITLE : ENGLISH_TITLE;
+  try {
+    localStorage.setItem(LANGUAGE_KEY, isArabic ? "ar" : "en");
+  } catch {
+    // The language still applies for this visit if storage is unavailable.
+  }
+}
+
+// Gregorian calendar with Western digits, as most Saudi apps show dates.
+export function dateLocale() {
+  return currentLanguage() === "ar" ? "ar-SA-u-ca-gregory-nu-latn" : undefined;
+}
+
+// index.html may have switched to Arabic before this module loaded.
+if (currentLanguage() === "ar") document.title = ARABIC_TITLE;

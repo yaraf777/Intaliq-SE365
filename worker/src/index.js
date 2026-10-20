@@ -1,6 +1,7 @@
-const MODEL = "@cf/meta/llama-3.1-8b-instruct";
+const MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 const MAX_MESSAGES = 12;
 const MAX_CHARS = 1000;
+const DEFAULT_ORIGINS = "https://intaliq-se-365.vercel.app,http://127.0.0.1:4173,http://localhost:4173";
 
 const SYSTEM_PROMPT = `You are Intaliq AI Coach, a friendly fitness assistant inside the Intaliq app.
 Help users plan workouts, pace their goals, and pick training sessions.
@@ -9,7 +10,7 @@ If someone describes pain, injury, or a medical issue, suggest they consult a pr
 
 function corsHeaders(request, env) {
   const origin = request.headers.get("Origin") || "";
-  const allowed = (env.ALLOWED_ORIGINS || "").split(",").map((value) => value.trim());
+  const allowed = (env.ALLOWED_ORIGINS || DEFAULT_ORIGINS).split(",").map((value) => value.trim());
   const isAllowed = allowed.includes(origin) || /^https:\/\/intaliq-se-365[\w-]*\.vercel\.app$/.test(origin);
   return {
     "Access-Control-Allow-Origin": isAllowed ? origin : allowed[0],
@@ -57,7 +58,8 @@ export default {
     }
 
     try {
-      const result = await env.AI.run(MODEL, {
+      const ai = env.Intaliq || env.AI;
+      const result = await ai.run(MODEL, {
         messages: [{ role: "system", content: SYSTEM_PROMPT + profileContext(body.profile) }, ...messages],
         max_tokens: 400,
       });
